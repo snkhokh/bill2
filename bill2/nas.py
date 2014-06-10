@@ -17,15 +17,18 @@ from config import dbhost, dbuser, dbpass, dbname
 
 class Nas(Thread):
 
-    def ip_stoa(n):
-        return str(n>>24 & 255)+'.'+str(n>>16 & 255)+'.'+str(n>>8 &255)+'.'+str(n & 255)
+    def ip_ntos(n,prefix=32):
+        tail = '/'+str(prefix) if prefix < 32 else ''
+        return str(n>>24 & 255)+'.'+str(n>>16 & 255)+'.'+str(n>>8 &255)+'.'+str(n & 255) + tail
 
-    def ip_aton(s):
+    def ip_ston(addr):
+        s = addr.split('/')
+        lpref = int(s.pop()) if len(s) > 1 else 32
         x = int(0)
         for i in s.split('.'):
             x <<= 8
             x += int(i)
-        return x
+        return (x,lpref)
 
     def __init__(self, hosts=None, users=None):
         """
@@ -52,9 +55,9 @@ class Nas(Thread):
         # ToDo в базе д.б. признак привязки статика к конкретному НАС
         c.execute('SELECT int_ip FROM hostip WHERE dynamic = 0')
         for row in c.fetchall():
-            self.__get_host('0_' + str(row[0]))
+            self.get_host('0_' + str(row[0]))
 
-    def __get_host(self, hostId):
+    def get_host(self, hostId):
         if not hostId in self.__hosts:
             host = self.__all_hosts.createHost(hostId, self)
             self.__hosts[hostId] = host
@@ -64,13 +67,13 @@ class Nas(Thread):
 
     def host_on(self, cmd):
         assert isinstance(cmd, Command)
-        h = self.__get_host(cmd.hostid)
+        h = self.get_host(cmd.hostid)
         hwState = self._hw_get_host_state(h)
         if not hwState['on']:
             if self._hw_host_on(h): h.on = True
 
     def host_off(self, cmd):
-        h = self.__get_host(cmd.hostid)
+        h = self.get_host(cmd.hostid)
         hwState = self._hw_get_host_state(h)
         if hwState['on']:
             if self._hw_host_off(h): h.on = False
@@ -85,7 +88,7 @@ class Nas(Thread):
 
     def set_host_speed(self, cmd):
         assert isinstance(cmd,Command)
-        h = self.__get_host(cmd.hostid)
+        h = self.get_host(cmd.hostid)
         hwState = self._hw_get_host_state(h)
         a = cmd.params
         if 'speedUp' in cmd.params and hwState['spUp'] <> cmd.params['speedUp']:
@@ -96,7 +99,7 @@ class Nas(Thread):
                 h.curSpeedUp = cmd.params['speedDw']
 
     def setHostFilter(self, cmd):
-        h = self.__get_host(cmd.hostid)
+        h = self.get_host(cmd.hostid)
         hwState = self._hw_get_host_state(h)
         if 'filterId' in cmd.params:
             filterId = cmd.params['filterId']

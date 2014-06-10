@@ -222,8 +222,7 @@ class Networking(Core):
 def test():
     m = Core('10.128.2.1',DEBUG=True)
     m.login('billing','751I6R')
-    print m.response_handler(m.talk(('/ip/firewall/filter/add','=chain=count','=src-address=1.2.3.4','=action=return',
-    '/ip/firewall/filter/add','=chain=count','=dst-address=1.2.3.4','=action=return',)))
+    print m.response_handler(m.talk(('/ip/firewall/filter/print','?chain=count','?src-address=1.2.3.4/31','?dst-address=1.2.3.4/31','?#|')))
 #    print m.response_handler(m.talk(('/ip/firewall/filter/remove','=.id=*18,*1c')))
 
 if __name__ == "__main__":
