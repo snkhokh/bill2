@@ -12,10 +12,10 @@ class MikroNas(Nas):
         self.__hw_nas.login(login, passwd)
         self.__hw_lock = Lock()
         with self.__hw_lock:
-            self.__hosts_state = self.__get_hw_nas_state()
+            self.__hosts_state = self.__get_hw_nas_state
 
+    @property
     def __get_hw_nas_state(self):
-
         state = dict()
         def add_key_to_host(ip, item):
             if not ip in state: state[ip] = dict()
@@ -36,17 +36,15 @@ class MikroNas(Nas):
         #get all count chains
         for item in self.__hw_nas.response_handler(self.__hw_nas.talk(('/ip/firewall/filter/print', '?chain=count'))):
             if 'src-address' in item:
-                add_key_to_host(item['src-address'],{'cnt_up_id': item['.id']})
-                add_key_to_host(item['src-address'],{'cnt_up': int(item['bytes'])})
+                add_key_to_host(item['src-address'],{'cnt_up':{'id': item['.id'],'val':int(item['bytes'])}})
             elif 'dst-address' in item:
-                add_key_to_host(item['dst-address'],{'cnt_dw_id': item['.id']})
-                add_key_to_host(item['dst-address'],{'cnt_dw': int(item['bytes'])})
-
+                add_key_to_host(item['dst-address'],{'cnt_dw':{'id': item['.id'],'val':int(item['bytes'])}})
         return state
 
 
     def _hw_get_all_hosts(self):
-        print self.__get_hw_nas_state()
+        with self.__hw_lock:
+            print self.__get_hw_nas_state
 
     def periodic_proc(self):
         self._hw_get_all_hosts()
@@ -56,16 +54,14 @@ class MikroNas(Nas):
         ip = self.ip_ntos(host.ip, prefix=host.lprefix)
         with self.__hw_lock:
             if not self.__hosts_state.has_key(ip): self.__hosts_state[ip]= dict()
-            if not self.__hosts_state[ip].has_key('cnt_dw_id'):
+            if not 'cnt_dw' in self.__hosts_state[ip]:
                 (ch_id,) = self.__hw_nas.response_handler(self.__hw_nas.talk('/ip/firewall/filter/add', '=chain=count', '=dst-address=' + ip, '=action=return'))
                 if ch_id:
-                    self.__hosts_state[ip]['cnt_dw_id'] = ch_id
-                    self.__hosts_state[ip]['cnt_dw'] = 0
-            if not self.__hosts_state[ip].has_key('cnt_up_id'):
+                    self.__hosts_state[ip].update({'cnt_dw':{'id':ch_id,'val':0}})
+            if not 'cnt_up' in self.__hosts_state[ip]:
                 (ch_id,) = self.__hw_nas.response_handler(self.__hw_nas.talk('/ip/firewall/filter/add', '=chain=count', '=src-address=' + ip, '=action=return'))
                 if ch_id:
-                    self.__hosts_state[ip]['cnt_up_id'] = ch_id
-                    self.__hosts_state[ip]['cnt_up'] = 0
+                    self.__hosts_state[ip].update({'cnt_up':{'id':ch_id,'val':0}})
 
     def __rm_count_pare(self, host_id):
         host = self.get_host(host_id)
@@ -74,9 +70,9 @@ class MikroNas(Nas):
             if not ip in self.__hosts_state:
                 return
             ids = list()
-            if 'cnt up_id' in self.__hosts_state[ip]:
-                ids.append(self.__hosts_state[ip]['cnt up_id'])
-            if 'cnt dw_id' in self.__hosts_state[ip]:
-                ids.append(self.__hosts_state[ip]['cnt dw_id'])
+            if 'cnt_up' in self.__hosts_state[ip]:
+                ids.append(self.__hosts_state[ip]['cnt_up']['id'])
+            if 'cnt_dw' in self.__hosts_state[ip]:
+                ids.append(self.__hosts_state[ip]['cnt_dw']['id'])
             if ids:
                 self.__hw_nas.talk('/ip/firewall/filter/remove', '=.id='+','.join(ids))
