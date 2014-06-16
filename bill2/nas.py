@@ -6,13 +6,11 @@ __author__ = 'sn'
 from threading import Thread, Timer
 from Queue import Queue, Empty
 
-from MySQLdb.cursors import Cursor
-from MySQLdb.connections import Connection
 
 from host import Hosts
 from user import Users
 from commands import Command
-from config import dbhost, dbuser, dbpass, dbname
+from config import periodic_proc_timeout
 
 
 class Nas(Thread):
@@ -30,38 +28,19 @@ class Nas(Thread):
             x += int(i)
         return (x,lpref)
 
-    def __init__(self, hosts=None, users=None):
+    def __init__(self, hosts=None):
         """
         :type hosts: Hosts
         :type users: Users
         """
         super(Nas, self).__init__()
         self.__all_hosts = hosts
-        self.__users = users
-        self.__hosts = dict()
-        self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname)
         self.__comq = Queue()
-        self.loadAllStaticHosts()
         self.__exit_flag = False
 
 
-    @property
-    def db(self):
-        return self.__db
-
-    def loadAllStaticHosts(self):
-        c = self.__db.cursor()
-        assert isinstance(c, Cursor)
-        # ToDo в базе д.б. признак привязки статика к конкретному НАС
-        c.execute('SELECT int_ip FROM hostip WHERE dynamic = 0')
-        for row in c.fetchall():
-            self.get_host('0_' + str(row[0]))
-
     def get_host(self, hostId):
-        if not hostId in self.__hosts:
-            host = self.__all_hosts.createHost(hostId, self)
-            self.__hosts[hostId] = host
-        return self.__hosts[hostId]
+        return self.__all_hosts.get_host(hostId)
 
 # Command handlers
 
@@ -80,11 +59,10 @@ class Nas(Thread):
 
     def host_rm(self, cmd):
         hid = cmd.hostid
+        host = self.get_host(hid)
         self._hw_host_off(hid)
-        host = self.__hosts[hid]
         # do some with host
-        self.__all_hosts.removeHost(hid)
-        del self.__hosts[hid]
+        self.__all_hosts.remove_host(hid)
 
     def set_host_speed(self, cmd):
         assert isinstance(cmd,Command)
@@ -118,7 +96,7 @@ class Nas(Thread):
 
     def __timer_handler(self, i=None):
         if i:
-            Timer(6, self.__timer_handler).start()
+            Timer(periodic_proc_timeout, self.__timer_handler).start()
         else:
             self.putCmd(Command('timer'))
 

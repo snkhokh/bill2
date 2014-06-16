@@ -12,11 +12,13 @@ def main():
     print 'Init start ...'
     u = Users()
     h = Hosts(u)
-    nas1 = MikroNas(hosts=h, users=u, address = nases['m1']['address'], login =  nases['m1']['login'], passwd = nases['m1']['passwd'])
+    nas1 = MikroNas(hosts=h, address=nases['m1']['address'], login=nases['m1']['login'], passwd=nases['m1']['passwd'])
     print 'Init done!'
     nas1.start()
-    sleep(60)
+    h.start()
+    sleep(30)
     nas1.putCmd(Command('stop'))
+    h.putCmd(Command('stop'))
 
 
 if __name__ == '__main__':
