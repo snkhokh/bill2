@@ -17,12 +17,21 @@ class Host(object):
         self.__ip = host_ip
         self.__lprefix = lprefix
         self.__user = None
+        self.__is_ppp = False
         # a = getCurPolicyForUser(self.uid)
         #self.curSpeedDw,
         #self.curSpeedUp,
         #self.curFilterId) = info
         self.__count_in = 0
         self.__count_out = 0
+
+    @property
+    def is_ppp(self):
+        return self.__is_ppp
+
+    @is_ppp.setter
+    def is_ppp(self,p):
+        self.__is_ppp = p
 
     @property
     def user(self):
@@ -87,12 +96,14 @@ class Hosts(Thread):
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
                 host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
+                host = None
                 if not host_id in self.__hosts:
-                    self.__hosts[host_id] = Host(h['host_ip'], 32)
-                self.host(host_id).counter = dict(dw=h['out_octets'], up=h['in_octets'])
-                u = self.__users.get_user(h['acc_uid'])
-                if u:
-                    self.host(host_id).user = u
+                    host = Host(h['host_ip'], 32)
+                    self.__hosts[host_id] = host
+                else: host = self.__hosts[host_id]
+                host.is_ppp = True
+                host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                host.user = self.__users.get_user(h['acc_uid'])
 
 
         # c.execute('SELECT int_ip FROM hostip WHERE dynamic = 0')
