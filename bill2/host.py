@@ -30,7 +30,7 @@ class Host(object):
         return self.__is_ppp
 
     @is_ppp.setter
-    def is_ppp(self,p):
+    def is_ppp(self, p):
         self.__is_ppp = p
 
     @property
@@ -39,7 +39,8 @@ class Host(object):
 
     @user.setter
     def user(self, user_link):
-        assert isinstance(user_link, User)
+        if not user_link is None:
+            assert isinstance(user_link, User)
         self.__user = user_link
 
     @property
@@ -47,7 +48,7 @@ class Host(object):
         return {'dw': self.__count_in, ' up': self.__count_out}
 
     @counter.setter
-    def counter(self, c={'dw':0,'up':0}):
+    def counter(self, c={'dw': 0, 'up': 0}):
         self.__count_in = c['dw']
         self.__count_out = c['up']
 
@@ -100,15 +101,25 @@ class Hosts(Thread):
                 if not host_id in self.__hosts:
                     host = Host(h['host_ip'], 32)
                     self.__hosts[host_id] = host
-                else: host = self.__hosts[host_id]
+                else:
+                    host = self.__hosts[host_id]
                 host.is_ppp = True
                 host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
                 host.user = self.__users.get_user(h['acc_uid'])
 
+        sql = 'SELECT int_ip,mask,PersonId FROM hostip WHERE dynamic = 0'
+        c.execute(sql)
+        with self.__lock:
+            for row in c.fetchall():
+                h = {c.description[n][0]: item for (n, item) in enumerate(row)}
+                host_id = '0_' + str(h['int_ip'])
+    #            host = None
+                if not host_id in self.__hosts:
+                    host = Host(h['int_ip'], h['mask'])
+                    self.__hosts[host_id] = host
+                    host.user = self.__users.get_user(h['PersonId'])
+    #            else: host = self.__hosts[host_id]
 
-        # c.execute('SELECT int_ip FROM hostip WHERE dynamic = 0')
-        # for row in c.fetchall():
-        # self.get_host('0_' + str(row[0]))
         print 'Info about %s hosts loaded...' % len(self.__hosts)
 
     def get_host(self, host_id):
@@ -117,7 +128,6 @@ class Hosts(Thread):
                 return dict(zip(('nas', 'host'), self.__hosts[host_id]))
             else:
                 return None
-
 
     def remove_host(self, host_id):
         with self.__lock:
@@ -159,23 +169,5 @@ class Hosts(Thread):
             Timer(periodic_proc_timeout, self.__timer_handler).start()
         else:
             self.put_cmd(Command('timer'))
-
-
-def get_stat_host_info(ip, db):
-    cur = db.cursor()
-    assert isinstance(cur, Cursor)
-    cur.execute('SELECT PersonId, mask, flags from hostip where int_ip = %s', (ip,))
-    row = cur.fetchone()
-    if not row:
-        return None
-    r = dict()
-    r['uid'] = row[0]
-    r['lprefix'] = row[1]
-    r['flags'] = row[2]
-    return r
-
-
-def get_dyn_host_info(ip, pool, db):
-    return False
 
 

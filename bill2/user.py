@@ -16,7 +16,11 @@ class Users():
         self.loadUsers()
 
     def get_user(self,user_id):
-        return self.__users[user_id] if user_id in self.__users else None
+        if user_id in self.__users:
+            return self.__users[user_id]
+        else:
+            print 'Not found user for user_id: %s' % user_id
+            return None
 
     def appendUser(self, user):
         assert isinstance(user, User)
