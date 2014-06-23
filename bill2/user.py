@@ -15,6 +15,9 @@ class Users():
         self.__comq = Queue()
         self.loadUsers()
 
+    def get_user(self,user_id):
+        return self.__users[user_id] if user_id in self.__users else None
+
     def appendUser(self, user):
         assert isinstance(user, User)
         with self.__users_lock:

@@ -1,6 +1,7 @@
 __author__ = 'sn355_000'
 from bill2.nas import Nas
 from util.RosAPI import Core
+from util import net
 from threading import Lock
 
 
@@ -57,7 +58,7 @@ class MikroNas(Nas):
 
     def __create_count_pare(self, host_id):
         host = self.get_host(host_id)
-        ip = self.ip_ntos(host.ip, prefix=host.lprefix)
+        ip = net.ip_ntos(host.ip, prefix=host.lprefix)
         with self.__hw_lock:
             if not ip in self.__hosts_state:
                 self.__hosts_state[ip] = dict()
@@ -74,7 +75,7 @@ class MikroNas(Nas):
 
     def __rm_count_pare(self, host_id):
         host = self.get_host(host_id)
-        ip = self.ip_ntos(host.ip, prefix=host.lprefix)
+        ip = net.ip_ntos(host.ip, prefix=host.lprefix)
         with self.__hw_lock:
             if not ip in self.__hosts_state:
                 return

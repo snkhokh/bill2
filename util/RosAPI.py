@@ -3,8 +3,8 @@
 #
 #       RosAPI.py
 #       
-#       Copyright 2010 David Jelić <djelic@buksna.net>
-#       Copyright 2010 Luka Blašković <lblasc@znode.net>
+#       Copyright 2010 David Jelić <djelic@buksna.net.py>
+#       Copyright 2010 Luka Blašković <lblasc@znode.net.py>
 #       
 
 """Python binding for Mikrotik RouterOS API"""

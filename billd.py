@@ -18,7 +18,7 @@ def main():
     h.start()
     sleep(30)
     nas1.putCmd(Command('stop'))
-    h.putCmd(Command('stop'))
+    h.put_cmd(Command('stop'))
 
 
 if __name__ == '__main__':
