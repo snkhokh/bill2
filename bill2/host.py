@@ -13,25 +13,26 @@ from util import net
 
 
 class Host(object):
-    def __init__(self, host_ip, lprefix):
+    def __init__(self, host_ip, lprefix, version):
         self.__ip = host_ip
         self.__lprefix = lprefix
         self.__user = None
-        self.__is_ppp = False
-        # a = getCurPolicyForUser(self.uid)
-        #self.curSpeedDw,
-        #self.curSpeedUp,
-        #self.curFilterId) = info
+        self.__version = version
         self.__count_in = 0
         self.__count_out = 0
+#
+        self.static = False
+        self.need_statistic = False
+        self.is_ppp = False
+
 
     @property
-    def is_ppp(self):
-        return self.__is_ppp
+    def ver(self):
+        return self.__version
 
-    @is_ppp.setter
-    def is_ppp(self, p):
-        self.__is_ppp = p
+    @ver.setter
+    def ver(self,n):
+        self.__version = n
 
     @property
     def user(self):
@@ -67,6 +68,8 @@ class Hosts(Thread):
         self.__users = users
         self.__lock = Lock()
         self.__hosts = dict()
+        self.__hosts_ver = 0
+        self.__sessions_ver = 0
         self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname)
         self.__exit_flag = False
         self.__comq = Queue()
@@ -89,9 +92,15 @@ class Hosts(Thread):
 
         # ToDo в базе д.б. признак привязки статика к конкретному НАС
         # загрузим инфу о сессиях
-
-        sql = 'SELECT ip_pool_id,inet_aton(framed_ip) AS host_ip,in_octets,out_octets,acc_uid' \
-              ' FROM ip_sessions WHERE stop_time IS NULL AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+        c.execute('LOCK TABLES ip_sessions READ')
+ #
+        sql = 'SELECT max(unix_timestamp(start_time)) AS session_ver FROM ip_sessions WHERE stop_time IS NULL'
+        c.execute(sql)
+        self.__sessions_ver = c.fetchone()[0]
+#
+        sql = 'SELECT ip_pool_id,inet_aton(framed_ip) AS host_ip,in_octets,out_octets,' \
+              'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
+              ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
         c.execute(sql)
         with self.__lock:
             for row in c.fetchall():
@@ -99,26 +108,41 @@ class Hosts(Thread):
                 host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
                 host = None
                 if not host_id in self.__hosts:
-                    host = Host(h['host_ip'], 32)
+                    host = Host(h['host_ip'], 32, h['version'])
                     self.__hosts[host_id] = host
                 else:
                     host = self.__hosts[host_id]
-                host.is_ppp = True
-                host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
-                host.user = self.__users.get_user(h['acc_uid'])
-
-        sql = 'SELECT int_ip,mask,PersonId FROM hostip WHERE dynamic = 0'
+                if h['version'] >= host.ver:
+                    host.is_ppp = True
+                    host.static = not h['ip_pool_id']
+                    host.need_statistic = False
+                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                    host.user = self.__users.get_user(h['acc_uid'])
+#
+        c.execute('UNLOCK TABLES')
+#
+        c.execute('LOCK TABLES hostip READ')
+#
+        sql = 'SELECT max(version) AS hosts_ver FROM hostip WHERE dynamic =0'
+        c.execute(sql)
+        self.__hosts_ver = c.fetchone()[0]
+#
+        sql = 'SELECT int_ip,mask,PersonId,version FROM hostip WHERE dynamic = 0'
         c.execute(sql)
         with self.__lock:
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
                 host_id = '0_' + str(h['int_ip'])
-    #            host = None
                 if not host_id in self.__hosts:
-                    host = Host(h['int_ip'], h['mask'])
+                    host = Host(h['int_ip'], h['mask'], h['version'])
                     self.__hosts[host_id] = host
                     host.user = self.__users.get_user(h['PersonId'])
-    #            else: host = self.__hosts[host_id]
+                    host.static = True
+                    host.need_statistic = True
+                else:
+                    self.__hosts[host_id].ver = h['version']
+
+        c.execute('UNLOCK TABLES')
 
         print 'Info about %s hosts loaded...' % len(self.__hosts)
 
