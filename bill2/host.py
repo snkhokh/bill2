@@ -66,25 +66,15 @@ class Hosts(Thread):
         """
         super(Hosts, self).__init__()
         self.__users = users
-        self.__lock = Lock()
-        self.__hosts = dict()
         self.__hosts_ver = 0
         self.__sessions_ver = 0
         self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname)
         self.__exit_flag = False
         self.__comq = Queue()
+        self.__lock = Lock()
+        self.__hosts = dict()
         self.load_all_hosts()
-
-    @property
-    def db(self):
-        return self.__db
-
-    def host(self, host_id):
-        """
-        :rtype : Host
-        :param host_id:
-        """
-        return self.__hosts[host_id] if host_id in self.__hosts else None
+        print 'Hosts created, info about %s hosts loaded...' % len(self.__hosts)
 
     def load_all_hosts(self):
         c = self.__db.cursor()
@@ -120,7 +110,6 @@ class Hosts(Thread):
                     host.user = self.__users.get_user(h['acc_uid'])
 #
         c.execute('UNLOCK TABLES')
-#
         c.execute('LOCK TABLES hostip READ')
 #
         sql = 'SELECT max(version) AS hosts_ver FROM hostip WHERE dynamic =0'
@@ -141,10 +130,11 @@ class Hosts(Thread):
                     host.need_statistic = True
                 else:
                     self.__hosts[host_id].ver = h['version']
-
         c.execute('UNLOCK TABLES')
 
-        print 'Info about %s hosts loaded...' % len(self.__hosts)
+    @property
+    def db(self):
+        return self.__db
 
     def get_host(self, host_id):
         with self.__lock:
