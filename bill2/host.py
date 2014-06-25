@@ -158,9 +158,59 @@ class Hosts(Thread):
           with self.__lock:
             return (self.__hosts[h] for h in self.__hosts.keys())
 
-    def remove_host(self, host_id):
+    def update_sessions(self):
+        c = self.__db.cursor()
+        assert isinstance(c, Cursor)
+
+        c.execute('LOCK TABLES ip_sessions READ')
+
+        sql = 'SELECT ip_pool_id,inet_aton(framed_ip) AS host_ip,in_octets,out_octets,' \
+              'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
+              ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+        c.execute(sql)
+
         with self.__lock:
-            del self.__hosts[host_id]
+            sessions = {self.__hosts[item].ip_n[0]: (self.__hosts[item].ver, item) for item in self.__hosts if self.__hosts[item].is_ppp}
+            removed_hosts = set()
+            added_hosts = set()
+            for row in c.fetchall():
+                h = {c.description[n][0]: item for (n, item) in enumerate(row)}
+                item = sessions.pop(h['host_ip'])
+                if item:
+                    if item[0] == h['version']:
+                        continue
+                    else:
+                        removed_hosts.add(item[1])
+                        self.__hosts.pop(item[1])
+
+
+                host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
+                if host_id in self.__hosts:
+                    removed_hosts.add(item[1])
+
+                added_hosts.add(host_id)
+
+
+
+
+                host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
+                host = None
+                if not host_id in self.__hosts:
+                    host = Host(h['host_ip'], 32, h['version'])
+                    self.__hosts[host_id] = host
+                else:
+                    host = self.__hosts[host_id]
+                if h['version'] >= host.ver:
+                    host.is_ppp = True
+                    host.static = not h['ip_pool_id']
+                    host.need_statistic = False
+                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                    host.user = self.__users.get_user(h['acc_uid'])
+#
+        c.execute('UNLOCK TABLES')
+
+
+
 
     def do_exit(self, cmd):
         isinstance(cmd, Command)
