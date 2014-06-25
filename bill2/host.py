@@ -25,6 +25,13 @@ class Host(object):
         self.need_statistic = False
         self.is_ppp = False
 
+    @property
+    def ip_n(self):
+        return self.__ip,self.__lprefix
+
+    @property
+    def ip_s(self):
+        return net.ip_ntos(self.__ip,self.__lprefix)
 
     @property
     def ver(self):
@@ -142,6 +149,14 @@ class Hosts(Thread):
                 return dict(zip(('nas', 'host'), self.__hosts[host_id]))
             else:
                 return None
+
+    def get_hosts_needs_stat(self):
+          with self.__lock:
+            return (self.__hosts[h] for h in self.__hosts.keys() if self.__hosts[h].need_statistic)
+
+    def get_reg_hosts(self):
+          with self.__lock:
+            return (self.__hosts[h] for h in self.__hosts.keys())
 
     def remove_host(self, host_id):
         with self.__lock:
