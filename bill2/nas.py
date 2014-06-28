@@ -29,9 +29,7 @@ class Nas(Thread):
     def test_statis_hosts(self):
         hosts_to_set = set()
         hosts_to_unset = self._get_statis_hosts_set()
-        for h in self.__hosts.get_hosts_needs_stat():
-            assert isinstance(h,Host)
-            h_ip = h.ip_s
+        for h_ip in self.__hosts.get_hosts_needs_stat():
             if h_ip in hosts_to_unset:
                 hosts_to_unset.remove(h_ip)
             else:
@@ -44,9 +42,7 @@ class Nas(Thread):
     def test_reg_hosts(self):
         hosts_to_reg = set()
         hosts_to_unreg = self._get_reg_hosts_set()
-        for h in self.__hosts.get_reg_hosts():
-            assert isinstance(h,Host)
-            h_ip = h.ip_s
+        for h_ip in self.__hosts.get_reg_hosts():
             if h_ip in hosts_to_unreg:
                 hosts_to_unreg.remove(h_ip)
             else:

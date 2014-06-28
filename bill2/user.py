@@ -15,7 +15,7 @@ class Users():
         self.__comq = Queue()
         self.loadUsers()
 
-    def get_user(self,user_id):
+    def get_user(self, user_id):
         if user_id in self.__users:
             return self.__users[user_id]
         else:
@@ -31,14 +31,12 @@ class Users():
         assert isinstance(cmd, Command)
         self.__comq.put(cmd)
 
-
     def run(self):
         while True:
             item = self.__comq.get()
             assert isinstance(item, Command)
             if item.uid in self.__users:
                 print "Command for user id %s received - %s" % (item.uid, item.cmd)
-
 
     def loadUsers(self):
         cur = self.__db.cursor()
@@ -64,12 +62,6 @@ class User:
         return self.__uid
 
     def isOn(self):
-        if self.__units: return True
+        if self.__units:
+            return True
         return False
-
-
-if __name__ == '__main__':
-    u = Users()
-    u.start()
-    print 'Done'
-    u.putCmd(Command(82, 'qqq', None))

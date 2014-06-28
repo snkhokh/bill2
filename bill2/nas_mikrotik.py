@@ -50,23 +50,24 @@ class MikroNas(Nas):
     def _get_act_hosts_set(self):
         return {h for h in self.__hosts_state.keys() if 'b_act' in self.__hosts_state[h]}
 
-
     def _set_statis_hosts(self, hosts_to_set):
         if hosts_to_set:
             with self.__hw_lock:
                 for ip in hosts_to_set:
                     if not ip in self.__hosts_state:
                         self.__hosts_state[ip] = dict()
-                    r = self.__hw_nas.talk(('/ip/firewall/filter/add', '=chain=count',
-                                            '=dst-address=' + ip, '=action=return'))[-1:][1].get('=ret')
-
-                    if r:
-                        self.__hosts_state[ip].update({'cnt_dw': {'id': r, 'val': 0}})
-
-                    r = self.__hw_nas.talk(('/ip/firewall/filter/add', '=chain=count',
-                                            '=src-address=' + ip, '=action=return'))[-1:][1].get('=ret')
-                    if r:
-                        self.__hosts_state[ip].update({'cnt_up': {'id': r, 'val': 0}})
+                    (reply, param) = self.__hw_nas.talk(('/ip/firewall/filter/add', '=chain=count',
+                                                        '=dst-address=' + ip, '=action=return'))[-1:][0]
+                    if reply == '!done':
+                        item_id = param.get('=ret')
+                        if item_id:
+                            self.__hosts_state[ip].update({'cnt_dw': {'id': item_id, 'val': 0}})
+                    (reply, param) = self.__hw_nas.talk(('/ip/firewall/filter/add', '=chain=count',
+                                                         '=src-address=' + ip, '=action=return'))[-1:][0]
+                    if reply == '!done':
+                        item_id = param.get('=ret')
+                        if item_id:
+                            self.__hosts_state[ip].update({'cnt_up': {'id': item_id, 'val': 0}})
 
     def _unset_statis_hosts(self, hosts_to_unset):
         ids = list()
@@ -82,17 +83,20 @@ class MikroNas(Nas):
             if ids:
                 self.__hw_nas.talk(('/ip/firewall/filter/remove', '=.id=' + ','.join(ids)))
 
-    def _set_addr_list_for_hosts(self,hosts_to_set,name):
+    def _set_addr_list_for_hosts(self, hosts_to_set, name):
         if hosts_to_set:
             with self.__hw_lock:
                 for ip in hosts_to_set:
-                    item_id = self.__hw_nas.talk(('/ip/firewall/address-list/add', '=list=%s' % name,
-                                                  '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][1].get('=ret')
-                    if not ip in self.__hosts_state:
-                        self.__hosts_state[ip] = dict()
-                    self.__hosts_state[ip].update({name: {'id': item_id}})
+                    (reply, param) = self.__hw_nas.talk(('/ip/firewall/address-list/add', '=list=%s' % name,
+                                                        '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                    if reply == '!done':
+                        item_id = param.get('=ret')
+                        if item_id:
+                            if not ip in self.__hosts_state:
+                                self.__hosts_state[ip] = dict()
+                            self.__hosts_state[ip].update({name: {'id': item_id}})
 
-    def _unset_addr_list_for_hosts(self, hosts_to_unset,name):
+    def _unset_addr_list_for_hosts(self, hosts_to_unset, name):
         ids = list()
         with self.__hw_lock:
             for ip in hosts_to_unset:
@@ -104,13 +108,13 @@ class MikroNas(Nas):
                 self.__hw_nas.talk(('/ip/firewall/address-list/remove', '=.id=' + ','.join(ids)))
 
     def _reg_hosts(self, hosts_to_reg):
-        self._set_addr_list_for_hosts(hosts_to_reg,'b_reg')
+        self._set_addr_list_for_hosts(hosts_to_reg, 'b_reg')
 
     def _unreg_hosts(self, hosts_to_unreg):
-        self._unset_addr_list_for_hosts(hosts_to_unreg,'b_reg')
+        self._unset_addr_list_for_hosts(hosts_to_unreg, 'b_reg')
 
-    def _act_hosts(self,hosts_to_set):
-        self._set_addr_list_for_hosts(hosts_to_set,'b_act')
+    def _act_hosts(self, hosts_to_set):
+        self._set_addr_list_for_hosts(hosts_to_set, 'b_act')
 
-    def _down_hosts(self,hosts_to_down):
-        self._unset_addr_list_for_hosts(hosts_to_down,'b_act')
+    def _down_hosts(self, hosts_to_down):
+        self._unset_addr_list_for_hosts(hosts_to_down, 'b_act')

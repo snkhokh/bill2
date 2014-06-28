@@ -13,9 +13,10 @@ from util import net
 
 
 class Host(object):
-    def __init__(self, host_ip, lprefix, version):
+    def __init__(self, host_ip, lprefix, version, pool_id):
         self.__ip = host_ip
         self.__lprefix = lprefix
+        self.__pool_id = pool_id
         self.__user = None
         self.__version = version
         self.__count_in = 0
@@ -102,10 +103,11 @@ class Hosts(Thread):
         with self.__lock:
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
+                host_id = net.ip_ntos(h['host_ip'])
+#                host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
                 host = None
                 if not host_id in self.__hosts:
-                    host = Host(h['host_ip'], 32, h['version'])
+                    host = Host(h['host_ip'], 32, h['version'], h['ip_pool_id'])
                     self.__hosts[host_id] = host
                 else:
                     host = self.__hosts[host_id]
@@ -128,9 +130,9 @@ class Hosts(Thread):
         with self.__lock:
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                host_id = '0_' + str(h['int_ip'])
+                host_id = net.ip_ntos(h['int_ip'],h['mask'])
                 if not host_id in self.__hosts:
-                    host = Host(h['int_ip'], h['mask'], h['version'])
+                    host = Host(h['int_ip'], h['mask'], h['version'], 0)
                     self.__hosts[host_id] = host
                     host.user = self.__users.get_user(h['PersonId'])
                     host.static = True
@@ -152,11 +154,11 @@ class Hosts(Thread):
 
     def get_hosts_needs_stat(self):
           with self.__lock:
-            return (self.__hosts[h] for h in self.__hosts.keys() if self.__hosts[h].need_statistic)
+            return (h for h in self.__hosts.keys() if self.__hosts[h].need_statistic)
 
     def get_reg_hosts(self):
           with self.__lock:
-            return (self.__hosts[h] for h in self.__hosts.keys())
+            return (h for h in self.__hosts.keys())
 
     def update_sessions(self):
         c = self.__db.cursor()
@@ -196,7 +198,7 @@ class Hosts(Thread):
                 host_id = str(h['ip_pool_id']) + '_' + str(h['host_ip'])
                 host = None
                 if not host_id in self.__hosts:
-                    host = Host(h['host_ip'], 32, h['version'])
+                    host = Host(h['host_ip'], 32, h['version'], 0)
                     self.__hosts[host_id] = host
                 else:
                     host = self.__hosts[host_id]
