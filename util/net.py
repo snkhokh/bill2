@@ -7,7 +7,7 @@ def ip_ston(addr):
     s = addr.split('/')
     lp = int(s.pop()) if len(s) > 1 else 32
     x = int(0)
-    for i in s.split('.'):
+    for i in s.pop().split('.'):
        x <<= 8
        x += int(i)
     return x,lp

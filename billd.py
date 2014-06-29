@@ -16,7 +16,7 @@ def main():
     print 'Init done!'
     nas1.start()
     h.start()
-    sleep(120)
+    sleep(20)
     nas1.putCmd(Command('stop'))
     h.put_cmd(Command('stop'))
 

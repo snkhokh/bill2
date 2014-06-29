@@ -1,14 +1,11 @@
 # coding=utf-8
-from macpath import split
-
 __author__ = 'sn'
 
 from threading import Thread, Timer
 from Queue import Queue, Empty
 
 
-from host import Hosts,Host
-from user import Users
+from host import Hosts, Host
 from commands import Command
 from config import periodic_proc_timeout
 
@@ -18,13 +15,11 @@ class Nas(Thread):
     def __init__(self, hosts=None):
         """
         :type hosts: Hosts
-        :type users: Users
         """
         super(Nas, self).__init__()
         self.__hosts = hosts
         self.__comq = Queue()
         self.__exit_flag = False
-
 
     def test_statis_hosts(self):
         hosts_to_set = set()
@@ -52,17 +47,10 @@ class Nas(Thread):
         if hosts_to_unreg:
             self._unreg_hosts(hosts_to_unreg)
 
-
-
-
-
-
 # Command handlers
 
-
-
     def do_exit(self, cmd):
-        isinstance(cmd,Command)
+        isinstance(cmd, Command)
         print 'Stop cmd received!!!'
         self.__exit_flag = True
 
@@ -76,8 +64,6 @@ class Nas(Thread):
         else:
             self.putCmd(Command('timer'))
 
-
-
     cmd_router = {'stop': do_exit,
                   'timer': __do_timer}
 
@@ -88,7 +74,8 @@ class Nas(Thread):
             try:
                 cmd = self.__comq.get(timeout=1)
                 assert isinstance(cmd, Command)
-                if cmd.cmd in Nas.cmd_router: Nas.cmd_router[cmd.cmd](self, cmd.uid)
+                if cmd.cmd in Nas.cmd_router:
+                    Nas.cmd_router[cmd.cmd](self, cmd.uid)
             except Empty:
                 pass
         print 'Nas done!!!'
@@ -102,7 +89,6 @@ class Nas(Thread):
         self.test_reg_hosts()
         print "Nas periodic procedure done!!!"
 
-
 #Hardware specific functions
 
     def _hw_host_on(self, host):
@@ -111,10 +97,10 @@ class Nas(Thread):
     def _hw_host_off(self, host):
         return True
 
-    def _hw_set_host_speed(self, h, param, speedUp):
+    def _hw_set_host_speed(self, h, param, speed_up):
         pass
 
-    def _hw_set_host_filter(self, h, filterId):
+    def _hw_set_host_filter(self, h, filter_id):
         pass
 
     def _set_statis_hosts(self, hosts_to_set):
