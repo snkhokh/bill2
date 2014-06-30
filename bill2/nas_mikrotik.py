@@ -41,7 +41,18 @@ class MikroNas(Nas):
                 add_key_to_host(item['dst-address'], {'cnt_dw': {'id': item['.id'], 'val': int(item['bytes'])}})
         return state
 
-    def _get_statis_hosts_set(self):
+    def _hw_update_stats(self):
+        for item in self.__hw_nas.response_handler(self.__hw_nas.talk(('/ip/firewall/filter/print', '?chain=count'))):
+            try:
+                if 'src-address' in item:
+                    self.__hosts_state[item['src-address']]['cnt_up']['val'] = item['bytes']
+                elif 'dst-address' in item:
+                    self.__hosts_state[item['dst-address']]['cnt_dw']['val'] = item['bytes']
+            except KeyError:
+
+                print 'Nas synchronisation error!'
+
+    def _hw_get_hosts_stats_set(self):
         return {h for h in self.__hosts_state.keys() if 'cnt_dw' in self.__hosts_state[h]}
 
     def _get_reg_hosts_set(self):
@@ -50,7 +61,7 @@ class MikroNas(Nas):
     def _get_act_hosts_set(self):
         return {h for h in self.__hosts_state.keys() if 'b_act' in self.__hosts_state[h]}
 
-    def _set_statis_hosts(self, hosts_to_set):
+    def _hw_set_stats_for_hosts(self, hosts_to_set):
         if hosts_to_set:
             with self.__hw_lock:
                 for ip in hosts_to_set:
@@ -69,7 +80,7 @@ class MikroNas(Nas):
                         if item_id:
                             self.__hosts_state[ip].update({'cnt_up': {'id': item_id, 'val': 0}})
 
-    def _unset_statis_hosts(self, hosts_to_unset):
+    def _hw_unset_stats_for_hosts(self, hosts_to_unset):
         ids = list()
         with self.__hw_lock:
             for ip in hosts_to_unset:
@@ -113,8 +124,7 @@ class MikroNas(Nas):
     def _unreg_hosts(self, hosts_to_unreg):
         self._unset_addr_list_for_hosts(hosts_to_unreg, 'b_reg')
 
-    def _act_hosts(self, hosts_to_set):
-        self._set_addr_list_for_hosts(hosts_to_set, 'b_act')
-
-    def _down_hosts(self, hosts_to_down):
-        self._unset_addr_list_for_hosts(hosts_to_down, 'b_act')
+    def _get_hw_stats(self):
+        return ((host, {'up': int(self.__hosts_state[host]['cnt_up']['val']),
+                        'dw': int(self.__hosts_state[host]['cnt_dw']['val'])}) for host in self.__hosts_state
+                if 'cnt_up' in self.__hosts_state[host] and 'cnt_dw' in self.__hosts_state[host])

@@ -21,18 +21,23 @@ class Nas(Thread):
         self.__comq = Queue()
         self.__exit_flag = False
 
-    def test_statis_hosts(self):
+    def do_stats(self):
+        # hosts with nas synchronization
         hosts_to_set = set()
-        hosts_to_unset = self._get_statis_hosts_set()
+        hosts_to_unset = self._hw_get_hosts_stats_set()
         for h_ip in self.__hosts.get_hosts_needs_stat():
             if h_ip in hosts_to_unset:
                 hosts_to_unset.remove(h_ip)
             else:
                 hosts_to_set.add(h_ip)
         if hosts_to_set:
-            self._set_statis_hosts(hosts_to_set)
+            self._hw_set_stats_for_hosts(hosts_to_set)
         if hosts_to_unset:
-            self._unset_statis_hosts(hosts_to_unset)
+            self._hw_unset_stats_for_hosts(hosts_to_unset)
+        # collect stats and send to hosts
+        self._hw_update_stats()
+        self.__hosts.update_stat_for_hosts(self._get_hw_stats())
+
 
     def test_reg_hosts(self):
         hosts_to_reg = set()
@@ -85,31 +90,20 @@ class Nas(Thread):
 
     def periodic_proc(self):
         print "Nas periodic procedure start..."
-        self.test_statis_hosts()
+        self.do_stats()
+        #
         self.test_reg_hosts()
         print "Nas periodic procedure done!!!"
 
 #Hardware specific functions
 
-    def _hw_host_on(self, host):
-        return True
-
-    def _hw_host_off(self, host):
-        return True
-
-    def _hw_set_host_speed(self, h, param, speed_up):
+    def _hw_set_stats_for_hosts(self, hosts_to_set):
         pass
 
-    def _hw_set_host_filter(self, h, filter_id):
+    def _hw_unset_stats_for_hosts(self, hosts_to_unset):
         pass
 
-    def _set_statis_hosts(self, hosts_to_set):
-        pass
-
-    def _unset_statis_hosts(self, hosts_to_unset):
-        pass
-
-    def _get_statis_hosts_set(self):
+    def _hw_get_hosts_stats_set(self):
     #abstract method
         return set()
 
@@ -121,4 +115,12 @@ class Nas(Thread):
 
     def _unreg_hosts(self, hosts_to_unreg):
         pass
+
+    def _hw_update_stats(self):
+        pass
+
+    def _get_hw_stats(self):
+        return list()
+
+
 

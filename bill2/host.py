@@ -5,6 +5,7 @@ from threading import Thread, Lock, Timer
 from Queue import Queue, Empty
 from MySQLdb.cursors import Cursor
 from MySQLdb.connections import Connection
+import datetime
 
 from config import dbhost, dbuser, dbpass, dbname, periodic_proc_timeout
 from user import Users, User
@@ -27,6 +28,9 @@ class Host(object):
         self.__version = 0
         self.__count_in = 0
         self.__count_out = 0
+        self.__stat_set = False
+        self.__stat_count_in = 0
+        self.__stat_count_out = 0
 #
         self.is_ppp = False
         self.session_ver = 0
@@ -36,23 +40,23 @@ class Host(object):
         return self.__pool_id
 
     @pool_id.setter
-    def pool_id(self,n):
+    def pool_id(self, n):
         self.__pool_id = n
 
     @property
     def ip_n(self):
-        return self.__ip,self.__lprefix
+        return self.__ip, self.__lprefix
 
     @property
     def ip_s(self):
-        return net.ip_ntos(self.__ip,self.__lprefix)
+        return net.ip_ntos(self.__ip, self.__lprefix)
 
     @property
     def ver(self):
         return self.__version
 
     @ver.setter
-    def ver(self,n):
+    def ver(self, n):
         self.__version = n
 
     @property
@@ -67,16 +71,24 @@ class Host(object):
 
     @property
     def counter(self):
-        return {'dw': self.__count_in, ' up': self.__count_out}
+        return {'dw': self.__count_in, ' up': self.__count_out} if self.__stat_set else {'dw': 0, 'up': 0}
 
     @counter.setter
     def counter(self, c={'dw': 0, 'up': 0}):
-        self.__count_in = c['dw']
-        self.__count_out = c['up']
+        if self.__stat_set:
+            d_in = c['dw'] - self.__stat_count_in
+            if d_in > 0:
+                self.__count_in += d_in
+            d_out = c['up'] - self.__stat_count_out
+            if d_out > 0:
+                self.__count_out += d_out
+        else:
+            self.__stat_set = True
+        self.__stat_count_in = c['dw']
+        self.__stat_count_out = c['up']
 
-    def counter_update(self, dw=0, up=0):
-        self.__count_in += dw
-        self.__count_out += up
+    def counter_reset(self):
+        self.__stat_set = False
 
 
 class Hosts(Thread):
@@ -112,7 +124,7 @@ class Hosts(Thread):
 #####################################################
 
     def get_hosts_needs_stat(self):
-          with self.__lock:
+        with self.__lock:
             return (h for h in self.__hosts.keys() if not self.__hosts[h].is_ppp)
 #####################################################
 
@@ -121,7 +133,7 @@ class Hosts(Thread):
         assert isinstance(c, Cursor)
         # загрузим инфу о сессиях
         try:
-            c.execute('LOCK TABLES ip_sessions READ')
+            # c.execute('LOCK TABLES ip_sessions READ')
             sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
                   'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
                   ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
@@ -139,11 +151,12 @@ class Hosts(Thread):
                         host.is_ppp = True
                         host.session_ver = h['version']
                         host.pool_id = h['ip_pool_id']
+                        host.counter_reset()
                         host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
                         host.user = self.__users.get_user(h['acc_uid'])
     #
-            c.execute('UNLOCK TABLES')
-            c.execute('LOCK TABLES hostip READ')
+            # c.execute('UNLOCK TABLES')
+            # c.execute('LOCK TABLES hostip READ')
     #
             sql = 'SELECT max(version) AS hosts_ver FROM hostip WHERE dynamic =0'
             c.execute(sql)
@@ -154,7 +167,7 @@ class Hosts(Thread):
             with self.__lock:
                 for row in c.fetchall():
                     h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                    host_id = net.ip_ntos(h['int_ip'],h['mask'])
+                    host_id = net.ip_ntos(h['int_ip'], h['mask'])
                     if not host_id in self.__hosts:
                         host = Host(h['int_ip'], h['mask'])
                         host.ver = h['version']
@@ -170,17 +183,18 @@ class Hosts(Thread):
         c = self.__db.cursor()
         assert isinstance(c, Cursor)
         try:
-            c.execute('LOCK TABLES ip_sessions READ')
+            # c.execute('LOCK TABLES ip_sessions READ')
             sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
                   'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
                   ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
             c.execute(sql)
             with self.__lock:
-                sessions = {item: self.__hosts[item].session_ver for item in self.__hosts.keys() if self.__hosts[item].session_ver}
+                sessions = {item: self.__hosts[item].session_ver for item in self.__hosts.keys()
+                            if self.__hosts[item].session_ver}
                 for row in c.fetchall():
                     h = {c.description[n][0]: item for (n, item) in enumerate(row)}
                     host_id = h['host_ip']
-                    old_ver = sessions.pop(host_id)
+                    old_ver = sessions.pop(host_id) if host_id in sessions else None
                     if not host_id in self.__hosts:
                         host = Host(*net.ip_ston(h['host_ip']))
                         self.__hosts[host_id] = host
@@ -192,8 +206,7 @@ class Hosts(Thread):
                         host.session_ver = h['version']
                         host.pool_id = h['ip_pool_id']
                     elif old_ver and not old_ver == h['version']:
-                        # todo: сбросить счетчики статистики
-                        pass
+                        host.counter_reset()
                     host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
                 for host_id in sessions.keys():
                     # для этих хостов сессия звыершена
@@ -201,9 +214,14 @@ class Hosts(Thread):
         finally:
             c.execute('UNLOCK TABLES')
 #####################################################
+    def update_stat_for_hosts(self,hosts):
+        with self.__lock:
+            for h,cnt in hosts:
+                if h in self.__hosts:
+                    self.__hosts[h].counter = cnt
 
     def get_reg_hosts(self):
-          with self.__lock:
+        with self.__lock:
             return (h for h in self.__hosts.keys())
 #####################################################
 
