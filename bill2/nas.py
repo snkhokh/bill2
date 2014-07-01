@@ -7,11 +7,10 @@ from Queue import Queue, Empty
 
 from host import Hosts, Host
 from commands import Command
-from config import periodic_proc_timeout
+from config import nas_stat_update_period, nas_conf_update_period
 
 
 class Nas(Thread):
-
     def __init__(self, hosts=None):
         """
         :type hosts: Hosts
@@ -21,7 +20,8 @@ class Nas(Thread):
         self.__comq = Queue()
         self.__exit_flag = False
 
-    def do_stats(self):
+    def do_stats(self,cmd=None):
+        print 'Update nas stats...'
         # hosts with nas synchronization
         hosts_to_set = set()
         hosts_to_unset = self._hw_get_hosts_stats_set()
@@ -36,8 +36,28 @@ class Nas(Thread):
             self._hw_unset_stats_for_hosts(hosts_to_unset)
         # collect stats and send to hosts
         self._hw_update_stats()
+        #
+        print 'Send nas stats to hosts...'
         self.__hosts.update_stat_for_hosts(self._get_hw_stats())
+        print 'Stats proc done...'
+#
+        Timer(nas_stat_update_period, self.queue_do_stats).start()
+############################################################
 
+    def queue_do_stats(self):
+        self.putCmd(Command('do_stats'))
+############################################################
+
+    def update_conf(self,cmd=None):
+        print 'Update nas configuration...'
+        self.test_reg_hosts()
+#
+        Timer(nas_conf_update_period, self.queue_update_conf).start()
+############################################################
+
+    def queue_update_conf(self):
+        self.putCmd(Command('update_conf'))
+############################################################
 
     def test_reg_hosts(self):
         hosts_to_reg = set()
@@ -51,6 +71,9 @@ class Nas(Thread):
             self._reg_hosts(hosts_to_reg)
         if hosts_to_unreg:
             self._unreg_hosts(hosts_to_unreg)
+############################################################
+
+
 
 # Command handlers
 
@@ -59,22 +82,14 @@ class Nas(Thread):
         print 'Stop cmd received!!!'
         self.__exit_flag = True
 
-    def __do_timer(self, cmd):
-        self.periodic_proc()
-        self.__timer_handler(True)
-
-    def __timer_handler(self, i=None):
-        if i:
-            Timer(periodic_proc_timeout, self.__timer_handler).start()
-        else:
-            self.putCmd(Command('timer'))
-
     cmd_router = {'stop': do_exit,
-                  'timer': __do_timer}
+                  'update_conf': update_conf,
+                  'do_stats': do_stats}
 
     def run(self):
         print 'Nas started...'
-        self.__timer_handler(True)
+        self.do_stats()
+        self.update_conf()
         while not self.__exit_flag:
             try:
                 cmd = self.__comq.get(timeout=1)
@@ -87,13 +102,6 @@ class Nas(Thread):
 
     def putCmd(self, cmd):
         self.__comq.put(cmd)
-
-    def periodic_proc(self):
-        print "Nas periodic procedure start..."
-        self.do_stats()
-        #
-        self.test_reg_hosts()
-        print "Nas periodic procedure done!!!"
 
 #Hardware specific functions
 

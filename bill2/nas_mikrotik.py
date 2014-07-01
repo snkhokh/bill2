@@ -49,7 +49,6 @@ class MikroNas(Nas):
                 elif 'dst-address' in item:
                     self.__hosts_state[item['dst-address']]['cnt_dw']['val'] = item['bytes']
             except KeyError:
-
                 print 'Nas synchronisation error!'
 
     def _hw_get_hosts_stats_set(self):

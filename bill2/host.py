@@ -7,7 +7,7 @@ from MySQLdb.cursors import Cursor
 from MySQLdb.connections import Connection
 import datetime
 
-from config import dbhost, dbuser, dbpass, dbname, periodic_proc_timeout
+from config import dbhost, dbuser, dbpass, dbname, periodic_proc_timeout, hosts_sessions_update_period
 from user import Users, User
 from commands import Command
 from util import net
@@ -71,24 +71,23 @@ class Host(object):
 
     @property
     def counter(self):
-        return {'dw': self.__count_in, ' up': self.__count_out} if self.__stat_set else {'dw': 0, 'up': 0}
+        return (self.__count_in, self.__count_out) if self.__stat_set else (0,0)
 
     @counter.setter
     def counter(self, c={'dw': 0, 'up': 0}):
-        if self.__stat_set:
-            d_in = c['dw'] - self.__stat_count_in
-            if d_in > 0:
-                self.__count_in += d_in
-            d_out = c['up'] - self.__stat_count_out
-            if d_out > 0:
-                self.__count_out += d_out
-        else:
-            self.__stat_set = True
+        d_in = c['dw'] - self.__stat_count_in
+        if d_in > 0:
+            self.__count_in += d_in
+        d_out = c['up'] - self.__stat_count_out
+        if d_out > 0:
+            self.__count_out += d_out
+        #
         self.__stat_count_in = c['dw']
         self.__stat_count_out = c['up']
 
     def counter_reset(self):
-        self.__stat_set = False
+        self.__count_in = 0
+        self.__count_out = 0
 
 
 class Hosts(Thread):
@@ -115,14 +114,6 @@ class Hosts(Thread):
         return self.__db
 #####################################################
 
-    def get_host(self, host_id):
-        with self.__lock:
-            if host_id in self.__hosts:
-                return dict(zip(('nas', 'host'), self.__hosts[host_id]))
-            else:
-                return None
-#####################################################
-
     def get_hosts_needs_stat(self):
         with self.__lock:
             return (h for h in self.__hosts.keys() if not self.__hosts[h].is_ppp)
@@ -132,30 +123,31 @@ class Hosts(Thread):
         c = self.__db.cursor()
         assert isinstance(c, Cursor)
         # загрузим инфу о сессиях
+        sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
+              'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
+              ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+        c.execute(sql)
+        with self.__lock:
+            for row in c.fetchall():
+                h = {c.description[n][0]: item for (n, item) in enumerate(row)}
+                host_id = h['host_ip']
+                if not host_id in self.__hosts:
+                    host = Host(*net.ip_ston(h['host_ip']))
+                    self.__hosts[host_id] = host
+                else:
+                    host = self.__hosts[host_id]
+                if h['version'] >= host.session_ver:
+                    host.is_ppp = True
+                    host.session_ver = h['version']
+                    host.pool_id = h['ip_pool_id']
+                    # todo сбросить статистику в базу
+                    host.counter = dict(dw=0,up=0)
+                    #
+                    host.counter_reset()
+                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                    host.user = self.__users.get_user(h['acc_uid'])
+#
         try:
-            # c.execute('LOCK TABLES ip_sessions READ')
-            sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
-                  'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
-                  ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
-            c.execute(sql)
-            with self.__lock:
-                for row in c.fetchall():
-                    h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                    host_id = h['host_ip']
-                    if not host_id in self.__hosts:
-                        host = Host(*net.ip_ston(h['host_ip']))
-                        self.__hosts[host_id] = host
-                    else:
-                        host = self.__hosts[host_id]
-                    if h['version'] >= host.session_ver:
-                        host.is_ppp = True
-                        host.session_ver = h['version']
-                        host.pool_id = h['ip_pool_id']
-                        host.counter_reset()
-                        host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
-                        host.user = self.__users.get_user(h['acc_uid'])
-    #
-            # c.execute('UNLOCK TABLES')
             # c.execute('LOCK TABLES hostip READ')
     #
             sql = 'SELECT max(version) AS hosts_ver FROM hostip WHERE dynamic =0'
@@ -179,46 +171,66 @@ class Hosts(Thread):
             c.execute('UNLOCK TABLES')
 #####################################################
 
-    def update_sessions(self):
+    def update_sessions(self,cmd=None):
         c = self.__db.cursor()
         assert isinstance(c, Cursor)
-        try:
-            # c.execute('LOCK TABLES ip_sessions READ')
-            sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
-                  'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
-                  ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
-            c.execute(sql)
-            with self.__lock:
-                sessions = {item: self.__hosts[item].session_ver for item in self.__hosts.keys()
-                            if self.__hosts[item].session_ver}
-                for row in c.fetchall():
-                    h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                    host_id = h['host_ip']
-                    old_ver = sessions.pop(host_id) if host_id in sessions else None
-                    if not host_id in self.__hosts:
-                        host = Host(*net.ip_ston(h['host_ip']))
-                        self.__hosts[host_id] = host
-                    else:
-                        host = self.__hosts[host_id]
-                    if not old_ver or not old_ver == h['version']:
-                        host.is_ppp = True
-                        host.user = self.__users.get_user(h['acc_uid'])
-                        host.session_ver = h['version']
-                        host.pool_id = h['ip_pool_id']
-                    elif old_ver and not old_ver == h['version']:
-                        host.counter_reset()
-                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
-                for host_id in sessions.keys():
-                    # для этих хостов сессия звыершена
-                    self.__hosts[host_id].session_ver = 0
-        finally:
-            c.execute('UNLOCK TABLES')
+        sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
+              'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
+              ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+        c.execute(sql)
+        with self.__lock:
+            sessions = {item: self.__hosts[item].session_ver for item in self.__hosts.keys()
+                        if self.__hosts[item].session_ver}
+            for row in c.fetchall():
+                h = {c.description[n][0]: item for (n, item) in enumerate(row)}
+                host_id = h['host_ip']
+                old_ver = sessions.pop(host_id) if host_id in sessions else None
+                if not host_id in self.__hosts:
+                    host = Host(*net.ip_ston(h['host_ip']))
+                    self.__hosts[host_id] = host
+                else:
+                    host = self.__hosts[host_id]
+                if not old_ver or not old_ver == h['version']:
+                    host.is_ppp = True
+                    host.user = self.__users.get_user(h['acc_uid'])
+                    host.session_ver = h['version']
+                    host.pool_id = h['ip_pool_id']
+                elif old_ver and not old_ver == h['version']:
+                    # todo сбросить статистику в базу
+                    host.counters = dict(dw=0, up=0)
+                    host.counter_reset()
+                host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+            for host_id in sessions.keys():
+                # для этих хостов сессия звыершена
+                self.__hosts[host_id].session_ver = 0
+        #
+        Timer(hosts_sessions_update_period, self.queue_update_sessions).start()
 #####################################################
+
+    def queue_update_sessions(self):
+        self.put_cmd(Command('update_sessions'))
+#####################################################
+
+    def do_billing(self):
+        now = datetime.datetime.now()
+        counters = dict()
+        with self.__lock:
+            for host_id in self.__hosts:
+                host = self.__hosts[host_id]
+                c = host.counter
+                if c[0] + c[1]:
+                    counters[host_id] = c
+                    host.counter_reset()
+
+#####################################################
+
+
     def update_stat_for_hosts(self,hosts):
         with self.__lock:
             for h,cnt in hosts:
                 if h in self.__hosts:
                     self.__hosts[h].counter = cnt
+#####################################################
 
     def get_reg_hosts(self):
         with self.__lock:
@@ -231,17 +243,12 @@ class Hosts(Thread):
         self.__exit_flag = True
 #####################################################
 
-    def __do_timer(self, cmd):
-        self.periodic_proc()
-        self.__timer_handler(True)
-#####################################################
-
     cmd_router = {'stop': do_exit,
-                  'timer': __do_timer}
+                  'update_sessions': update_sessions}
 
     def run(self):
         print 'Host handler started...'
-        self.__timer_handler(True)
+        self.queue_update_sessions()
         while not self.__exit_flag:
             try:
                 cmd = self.__comq.get(timeout=1)
@@ -257,15 +264,4 @@ class Hosts(Thread):
         self.__comq.put(cmd)
 #####################################################
 
-    def periodic_proc(self):
-        print "Hosts periodic procedure!!!"
-        self.update_sessions()
-#####################################################
-
-    def __timer_handler(self, i=None):
-        if i:
-            Timer(periodic_proc_timeout, self.__timer_handler).start()
-        else:
-            self.put_cmd(Command('timer'))
-#####################################################
 
