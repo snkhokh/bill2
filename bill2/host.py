@@ -7,7 +7,7 @@ from MySQLdb.cursors import Cursor
 from MySQLdb.connections import Connection
 import datetime
 
-from config import dbhost, dbuser, dbpass, dbname, periodic_proc_timeout, hosts_sessions_update_period
+from config import dbhost, dbuser, dbpass, dbname, hosts_billing_proc_period, hosts_sessions_update_period
 from user import Users, User
 from commands import Command
 from util import net
@@ -28,9 +28,9 @@ class Host(object):
         self.__version = 0
         self.__count_in = 0
         self.__count_out = 0
-        self.__stat_set = False
         self.__stat_count_in = 0
         self.__stat_count_out = 0
+        self.__stat_is_set = False
 #
         self.is_ppp = False
         self.session_ver = 0
@@ -71,17 +71,19 @@ class Host(object):
 
     @property
     def counter(self):
-        return (self.__count_in, self.__count_out) if self.__stat_set else (0,0)
+        return (self.__count_in, self.__count_out) if self.__stat_is_set else (0,0)
 
     @counter.setter
     def counter(self, c={'dw': 0, 'up': 0}):
-        d_in = c['dw'] - self.__stat_count_in
-        if d_in > 0:
-            self.__count_in += d_in
-        d_out = c['up'] - self.__stat_count_out
-        if d_out > 0:
-            self.__count_out += d_out
-        #
+        if self.__stat_is_set:
+            d_in = c['dw'] - self.__stat_count_in
+            if d_in > 0:
+                self.__count_in += d_in
+            d_out = c['up'] - self.__stat_count_out
+            if d_out > 0:
+                self.__count_out += d_out
+        else:
+            self.__stat_is_set = True
         self.__stat_count_in = c['dw']
         self.__stat_count_out = c['up']
 
@@ -134,18 +136,16 @@ class Hosts(Thread):
                 if not host_id in self.__hosts:
                     host = Host(*net.ip_ston(h['host_ip']))
                     self.__hosts[host_id] = host
-                else:
-                    host = self.__hosts[host_id]
-                if h['version'] >= host.session_ver:
                     host.is_ppp = True
-                    host.session_ver = h['version']
-                    host.pool_id = h['ip_pool_id']
-                    # todo сбросить статистику в базу
-                    host.counter = dict(dw=0,up=0)
-                    #
-                    host.counter_reset()
                     host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
-                    host.user = self.__users.get_user(h['acc_uid'])
+                elif h['version'] >= self.__hosts[host_id].session_ver:
+                    # новая сессия от уже обработанного IP
+                    host = self.__hosts[host_id]
+                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                    host.counter_reset()
+                host.user = self.__users.get_user(h['acc_uid'])
+                host.pool_id = h['ip_pool_id']
+                host.session_ver = h['version']
 #
         try:
             # c.execute('LOCK TABLES hostip READ')
@@ -211,7 +211,7 @@ class Hosts(Thread):
         self.put_cmd(Command('update_sessions'))
 #####################################################
 
-    def do_billing(self):
+    def do_billing(self, cmd=None):
         now = datetime.datetime.now()
         counters = dict()
         with self.__lock:
@@ -221,14 +221,21 @@ class Hosts(Thread):
                 if c[0] + c[1]:
                     counters[host_id] = c
                     host.counter_reset()
+                    if host.user.tp.have_limit():
+                        host.user.tp.calc_traf(c,now,host.user.tp_data)
+        Timer(hosts_billing_proc_period, self.queue_do_billing).start()
 
+#####################################################
+
+    def queue_do_billing(self):
+        self.put_cmd(Command('do_billing'))
 #####################################################
 
 
     def update_stat_for_hosts(self,hosts):
         with self.__lock:
-            for h,cnt in hosts:
-                if h in self.__hosts:
+            for h, cnt in hosts:
+                if h in self.__hosts and not self.__hosts[h].is_ppp:
                     self.__hosts[h].counter = cnt
 #####################################################
 
@@ -244,11 +251,13 @@ class Hosts(Thread):
 #####################################################
 
     cmd_router = {'stop': do_exit,
+                  'do_billing': do_billing,
                   'update_sessions': update_sessions}
 
     def run(self):
         print 'Host handler started...'
         self.queue_update_sessions()
+        Timer(hosts_billing_proc_period, self.queue_do_billing).start()
         while not self.__exit_flag:
             try:
                 cmd = self.__comq.get(timeout=1)

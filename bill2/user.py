@@ -4,6 +4,8 @@ from MySQLdb import connect
 from threading import Thread, Lock
 from Queue import Queue
 from commands import Command
+import json
+
 from config import dbhost, dbuser, dbpass, dbname
 from trafplan import Traf_plans,TP
 
@@ -18,6 +20,7 @@ class Users():
         self.__tps.load_all_tps(self.__db)
         self.__users = dict()
         self.load_all_users()
+
 
     def get_user(self, user_id):
         if user_id in self.__users:
@@ -45,11 +48,11 @@ class Users():
     def load_all_users(self):
         cur = self.__db.cursor()
         cur.execute(
-            'SELECT id AS uid,Name AS name,UnitRem AS cnt_dw, UnitRemOut AS cnt_up,TaxRateId AS tp_id,'
-            'PrePayedUnits AS units FROM persons ')
+            'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json FROM persons')
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
-            self.__users[row[0]] = User(r.pop('uid'),r.pop('name'),self.__tps.get_tp(r.pop('tp_id')),**r)
+            self.__users[row[0]] = User(r['uid'], r['name'], self.__tps.get_tp(r['tp_id']),
+                                        tp_data_json=r['tp_data_json'])
         print 'Now %s users loaded...' % len(self.__users)
 
 
@@ -59,13 +62,20 @@ class User:
         self.__name = name
         self.__tp = tp
         self.__tp_base = tp.make_param_for_user(**tp_arg)
+        self.__version = 0
+
+    @property
+    def tp(self):
+        return self.__tp
+
+    @property
+    def tp_data(self):
+        return self.__tp_base
 
     @property
     def uid(self):
         return self.__uid
 
-    def isOn(self):
-        if self.__units:
-            return True
-        return False
+    def update_db_data(self):
+        pass
 

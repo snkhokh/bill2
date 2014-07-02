@@ -1,5 +1,6 @@
 __author__ = 'sn'
 from MySQLdb import connect
+import json
 
 class TP:
     def __init__(self,id,name):
@@ -10,10 +11,22 @@ class TP:
         return True
 
     def make_param_for_user(self,**tp_arg):
-        return dict(count_in=0, count_out=0)
+        try:
+            tp_data = json.loads(tp_arg['tp_data_json'])
+        except (ValueError, TypeError):
+            return dict(count_in=0, count_out=0)
+        return tp_data
 
     def test(self,**karg):
         pass
+
+    def calc_traf(self, traf, timestamp, base):
+        (bytes_dw, bytes_up) = traf
+        base['count_in'] += bytes_dw
+        base['count_out'] += bytes_up
+
+
+
 
 class Traf_plans:
     def __init__(self):
