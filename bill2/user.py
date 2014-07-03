@@ -1,6 +1,6 @@
 __author__ = 'sn'
 
-from MySQLdb import connect
+from MySQLdb.connections import Connection
 from threading import Thread, Lock
 from Queue import Queue
 from commands import Command
@@ -15,12 +15,11 @@ class Users():
     def __init__(self):
         self.__users_lock = Lock()
         self.__comq = Queue()
-        self.__db = connect(host=dbhost, user=dbuser, passwd=dbpass, db=dbname, use_unicode=True, charset='cp1251')
+        self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname, use_unicode=True, charset='cp1251')
         self.__tps = Traf_plans()
         self.__tps.load_all_tps(self.__db)
         self.__users = dict()
         self.load_all_users()
-
 
     def get_user(self, user_id):
         if user_id in self.__users:
@@ -32,7 +31,7 @@ class Users():
     def appendUser(self, user):
         assert isinstance(user, User)
         with self.__users_lock:
-            self.__users[user.uid] = user
+            self.__users[user.db_id] = user
 
     def putCmd(self, cmd):
         assert isinstance(cmd, Command)
@@ -51,17 +50,16 @@ class Users():
             'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json FROM persons')
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
-            self.__users[row[0]] = User(r['uid'], r['name'], self.__tps.get_tp(r['tp_id']),
-                                        tp_data_json=r['tp_data_json'])
+            self.__users[r['uid']] = User(r['uid'], r['name'], self.__tps.get_tp(r['tp_id']), r['tp_data_json'])
         print 'Now %s users loaded...' % len(self.__users)
 
 
 class User:
-    def __init__(self, uid, name, tp, **tp_arg):
+    def __init__(self, uid, name, tp, tp_data):
         self.__uid = uid
         self.__name = name
         self.__tp = tp
-        self.__tp_base = tp.make_param_for_user(**tp_arg)
+        self.__tp_base = tp.load_data(tp_data)
         self.__version = 0
 
     @property
@@ -73,9 +71,14 @@ class User:
         return self.__tp_base
 
     @property
-    def uid(self):
+    def db_id(self):
         return self.__uid
 
-    def update_db_data(self):
-        pass
+    def db_upd_tp_data(self,db):
+        '''
+        :type db:   Connection
+        :return:
+        '''
+        cur = db.cursor()
+        cur.execute('UPDATE persons SET Opt = %s WHERE id = %s', (self.tp.save_data(self.tp_data), self.db_id))
 

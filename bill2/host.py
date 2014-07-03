@@ -31,9 +31,18 @@ class Host(object):
         self.__stat_count_in = 0
         self.__stat_count_out = 0
         self.__stat_is_set = False
+        self.__db_id = 0
 #
         self.is_ppp = False
         self.session_ver = 0
+
+    @property
+    def db_id(self):
+        return self.__db_id
+
+    @db_id.setter
+    def db_id(self,db_id):
+        self.__db_id = db_id
 
     @property
     def pool_id(self):
@@ -74,7 +83,7 @@ class Host(object):
         return (self.__count_in, self.__count_out) if self.__stat_is_set else (0,0)
 
     @counter.setter
-    def counter(self, c={'dw': 0, 'up': 0}):
+    def counter(self, c):
         if self.__stat_is_set:
             d_in = c['dw'] - self.__stat_count_in
             if d_in > 0:
@@ -154,7 +163,7 @@ class Hosts(Thread):
             c.execute(sql)
             self.__hosts_ver = c.fetchone()[0]
     #
-            sql = 'SELECT int_ip,mask,PersonId,version FROM hostip WHERE dynamic = 0'
+            sql = 'SELECT id, int_ip, mask, PersonId, version FROM hostip WHERE dynamic = 0'
             c.execute(sql)
             with self.__lock:
                 for row in c.fetchall():
@@ -162,16 +171,17 @@ class Hosts(Thread):
                     host_id = net.ip_ntos(h['int_ip'], h['mask'])
                     if not host_id in self.__hosts:
                         host = Host(h['int_ip'], h['mask'])
-                        host.ver = h['version']
                         host.user = self.__users.get_user(h['PersonId'])
                         self.__hosts[host_id] = host
                     else:
-                        self.__hosts[host_id].ver = h['version']
+                        host = self.__hosts[host_id]
+                    host.ver = h['version']
+                    host.db_id = h['id']
         finally:
             c.execute('UNLOCK TABLES')
 #####################################################
 
-    def update_sessions(self,cmd=None):
+    def update_sessions(self, cmd=None):
         c = self.__db.cursor()
         assert isinstance(c, Cursor)
         sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
@@ -197,7 +207,7 @@ class Hosts(Thread):
                     host.pool_id = h['ip_pool_id']
                 elif old_ver and not old_ver == h['version']:
                     # todo сбросить статистику в базу
-                    host.counters = dict(dw=0, up=0)
+                    host.counter = dict(dw=0, up=0)
                     host.counter_reset()
                 host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
             for host_id in sessions.keys():
@@ -213,18 +223,29 @@ class Hosts(Thread):
 
     def do_billing(self, cmd=None):
         now = datetime.datetime.now()
-        counters = dict()
+        stat_cnt = dict()
         with self.__lock:
             for host_id in self.__hosts:
                 host = self.__hosts[host_id]
                 c = host.counter
                 if c[0] + c[1]:
-                    counters[host_id] = c
+                    if not host.user.db_id in stat_cnt:
+                        stat_cnt[host.user.db_id] = {host.db_id : c}
+                    elif not host.db_id in stat_cnt[host.user.db_id]:
+                        stat_cnt[host.user.db_id][host.db_id] = c
+                    else:
+                        stat_cnt[host.user.db_id][host.db_id] =\
+                            tuple(c[i[0]]+i[1] for i in enumerate(stat_cnt[host.user.db_id][host.db_id]))
                     host.counter_reset()
                     if host.user.tp.have_limit():
-                        host.user.tp.calc_traf(c,now,host.user.tp_data)
+                        host.user.tp.calc_traf(c, now, host.user.tp_data)
+        if stat_cnt:
+            cur = self.db.cursor()
+        for user_id in stat_cnt.keys():
+            for host_id in stat_cnt[user_id].keys():
+                cur.execute('INSERT INTO stat (user_id, host_id, ts, dw, up) VALUES (%s, %s, %s, %s, %s)',
+                            (user_id, host_id, now) + stat_cnt[user_id][host_id])
         Timer(hosts_billing_proc_period, self.queue_do_billing).start()
-
 #####################################################
 
     def queue_do_billing(self):
