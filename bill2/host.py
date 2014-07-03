@@ -41,7 +41,7 @@ class Host(object):
         return self.__db_id
 
     @db_id.setter
-    def db_id(self,db_id):
+    def db_id(self, db_id):
         self.__db_id = db_id
 
     @property
@@ -80,7 +80,7 @@ class Host(object):
 
     @property
     def counter(self):
-        return (self.__count_in, self.__count_out) if self.__stat_is_set else (0,0)
+        return (self.__count_in, self.__count_out) if self.__stat_is_set else (0, 0)
 
     @counter.setter
     def counter(self, c):
@@ -230,7 +230,7 @@ class Hosts(Thread):
                 c = host.counter
                 if c[0] + c[1]:
                     if not host.user.db_id in stat_cnt:
-                        stat_cnt[host.user.db_id] = {host.db_id : c}
+                        stat_cnt[host.user.db_id] = {host.db_id: c}
                     elif not host.db_id in stat_cnt[host.user.db_id]:
                         stat_cnt[host.user.db_id][host.db_id] = c
                     else:

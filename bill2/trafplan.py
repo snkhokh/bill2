@@ -3,14 +3,14 @@ from MySQLdb import connect
 import json
 
 class TP:
-    def __init__(self,id,name,param):
+    def __init__(self, id, name, param):
         self.__id = id
         self.__name = name
 
     def have_limit(self):
         return True
 
-    def load_data(self,data_json):
+    def load_data(self, data_json):
         try:
             tp_data = json.loads(data_json)
         except (ValueError, TypeError):
@@ -20,7 +20,7 @@ class TP:
     def save_data(self, data):
         return json.dumps(data)
 
-    def test(self,**karg):
+    def test(self, **karg):
         pass
 
     def calc_traf(self, traf, timestamp, base):
@@ -31,19 +31,19 @@ class TP:
 
 
 
-class Traf_plans:
+class TrafPlans:
     def __init__(self):
         self.__tps = dict()
 
-    def load_all_tps(self,db):
+    def load_all_tps(self, db):
         cur = db.cursor()
-        cur.execute('SELECT id ,name, param FROM traf_planes')
+        cur.execute('SELECT id, name, param FROM traf_planes')
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
-            self.__tps[r['id']] = TP(r['id'],r['name'],r['param'])
+            self.__tps[r['id']] = TP(r['id'], r['name'], r['param'])
         print 'Now %s traf plans loaded...' % len(self.__tps)
 
-    def get_tp(self,id):
+    def get_tp(self, id):
         return self.__tps[id] if id in self.__tps else None
 
 

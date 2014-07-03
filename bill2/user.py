@@ -1,13 +1,13 @@
 __author__ = 'sn'
 
 from MySQLdb.connections import Connection
-from threading import Thread, Lock
+from threading import Lock
 from Queue import Queue
 from commands import Command
 import json
 
 from config import dbhost, dbuser, dbpass, dbname
-from trafplan import Traf_plans,TP
+from trafplan import TrafPlans, TP
 
 
 
@@ -16,7 +16,7 @@ class Users():
         self.__users_lock = Lock()
         self.__comq = Queue()
         self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname, use_unicode=True, charset='cp1251')
-        self.__tps = Traf_plans()
+        self.__tps = TrafPlans()
         self.__tps.load_all_tps(self.__db)
         self.__users = dict()
         self.load_all_users()

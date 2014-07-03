@@ -11,13 +11,16 @@ class Command():
 
     @property
     def hostid(self):
-        if 'hostid' in self.__params: return self.__params['hostid']
+        if 'hostid' in self.__params:
+            return self.__params['hostid']
         else: return None
 
     @property
     def uid(self):
-        if 'uid' in self.__params: return self.__params['uid']
-        else: return None
+        if 'uid' in self.__params:
+            return self.__params['uid']
+        else:
+            return None
 
     @property
     def params(self):

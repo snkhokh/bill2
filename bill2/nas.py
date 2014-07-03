@@ -5,7 +5,7 @@ from threading import Thread, Timer
 from Queue import Queue, Empty
 
 
-from host import Hosts, Host
+from host import Hosts
 from commands import Command
 from config import nas_stat_update_period, nas_conf_update_period
 
@@ -48,7 +48,7 @@ class Nas(Thread):
         self.putCmd(Command('do_stats'))
 ############################################################
 
-    def update_conf(self,cmd=None):
+    def update_conf(self, cmd=None):
         print 'Update nas configuration...'
         self.test_reg_hosts()
 #
@@ -72,8 +72,6 @@ class Nas(Thread):
         if hosts_to_unreg:
             self._unreg_hosts(hosts_to_unreg)
 ############################################################
-
-
 
 # Command handlers
 
@@ -129,6 +127,3 @@ class Nas(Thread):
 
     def _get_hw_stats(self):
         return list()
-
-
-

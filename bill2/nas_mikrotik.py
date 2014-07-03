@@ -1,7 +1,6 @@
 __author__ = 'sn355_000'
 from bill2.nas import Nas
 from util.RosAPI import Core
-from util import net
 from threading import Lock
 
 
