@@ -182,7 +182,7 @@ class Hosts(Thread):
 #####################################################
 
     def update_sessions(self, cmd=None):
-        c = self.__db.cursor()
+        c = self.db.cursor()
         assert isinstance(c, Cursor)
         sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
               'acc_uid,unix_timestamp(start_time) as version FROM ip_sessions WHERE stop_time IS NULL' \
