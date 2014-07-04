@@ -1,5 +1,5 @@
 __author__ = 'sn'
-from trafplan import TP,TrafPlans
+from trafplan import TPCore,TrafPlans
 from nas import Nases
 
 class Server:

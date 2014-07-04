@@ -103,10 +103,9 @@ class Host(object):
 
 class Hosts(Thread):
     def __init__(self, users):
-        """
-
+        '''
         :type users: Users
-        """
+        '''
         super(Hosts, self).__init__()
         self.__users = users
         self.__hosts_ver = 0
@@ -118,17 +117,26 @@ class Hosts(Thread):
         self.__hosts = dict()
         self.load_all_hosts()
         print 'Hosts created, info about %s hosts loaded...' % len(self.__hosts)
-#####################################################
 
     @property
     def db(self):
         return self.__db
-#####################################################
+    #####################################################
+
+    def get_host(self, host_id):
+        '''
+
+        :param host_id:
+        :return:
+        :rtype: Host
+        '''
+        return self.__hosts[host_id]
+    #####################################################
 
     def get_hosts_needs_stat(self):
         with self.__lock:
             return (h for h in self.__hosts.keys() if not self.__hosts[h].is_ppp)
-#####################################################
+    #####################################################
 
     def load_all_hosts(self):
         c = self.__db.cursor()
@@ -155,14 +163,14 @@ class Hosts(Thread):
                 host.user = self.__users.get_user(h['acc_uid'])
                 host.pool_id = h['ip_pool_id']
                 host.session_ver = h['version']
-#
+            #
         try:
             # c.execute('LOCK TABLES hostip READ')
-    #
+            #
             sql = 'SELECT max(version) AS hosts_ver FROM hostip WHERE dynamic =0'
             c.execute(sql)
             self.__hosts_ver = c.fetchone()[0]
-    #
+            #
             sql = 'SELECT id, int_ip, mask, PersonId, version FROM hostip WHERE dynamic = 0'
             c.execute(sql)
             with self.__lock:
@@ -179,7 +187,7 @@ class Hosts(Thread):
                     host.db_id = h['id']
         finally:
             c.execute('UNLOCK TABLES')
-#####################################################
+    #####################################################
 
     def update_sessions(self, cmd=None):
         c = self.db.cursor()
@@ -215,42 +223,42 @@ class Hosts(Thread):
                 self.__hosts[host_id].session_ver = 0
         #
         Timer(hosts_sessions_update_period, self.queue_update_sessions).start()
-#####################################################
+    #####################################################
 
     def queue_update_sessions(self):
         self.put_cmd(Command('update_sessions'))
-#####################################################
+    #####################################################
 
     def do_billing(self, cmd=None):
         now = datetime.datetime.now()
         stat_cnt = dict()
+        upd_users = set()
         with self.__lock:
             for host_id in self.__hosts:
                 host = self.__hosts[host_id]
                 c = host.counter
                 if c[0] + c[1]:
-                    if not host.user.db_id in stat_cnt:
-                        stat_cnt[host.user.db_id] = {host.db_id: c}
-                    elif not host.db_id in stat_cnt[host.user.db_id]:
-                        stat_cnt[host.user.db_id][host.db_id] = c
+                    k = (host.user.db_id,host.db_id)
+                    if not k in stat_cnt:
+                        stat_cnt[k] = c
                     else:
-                        stat_cnt[host.user.db_id][host.db_id] =\
-                            tuple(c[i[0]]+i[1] for i in enumerate(stat_cnt[host.user.db_id][host.db_id]))
+                        stat_cnt[k] = tuple(c[i] + cnt for (i, cnt) in enumerate(stat_cnt[k]))
                     host.counter_reset()
-                    if host.user.tp.have_limit():
-                        host.user.tp.calc_traf(c, now, host.user.tp_data)
+                    if host.user.tp.have_limit and host.user.tp.calc_traf(c, now):
+                        upd_users.add(host.user.db_id)
+        cur = self.db.cursor()
         if stat_cnt:
-            cur = self.db.cursor()
-        for user_id in stat_cnt.keys():
-            for host_id in stat_cnt[user_id].keys():
+            for k in stat_cnt.keys():
                 cur.execute('INSERT INTO stat (user_id, host_id, ts, dw, up) VALUES (%s, %s, %s, %s, %s)',
-                            (user_id, host_id, now) + stat_cnt[user_id][host_id])
+                            k + (now,) + stat_cnt[k])
+        for user_id in upd_users:
+            self.__users.get_user(user_id).db_upd_tp_data(cur)
         Timer(hosts_billing_proc_period, self.queue_do_billing).start()
-#####################################################
+    #####################################################
 
     def queue_do_billing(self):
         self.put_cmd(Command('do_billing'))
-#####################################################
+    #####################################################
 
 
     def update_stat_for_hosts(self,hosts):
@@ -261,15 +269,20 @@ class Hosts(Thread):
 #####################################################
 
     def get_reg_hosts(self):
+        '''
+
+        :return: dict { host_id: (host_is_active, upload_speed, download_speed, filter_number)
+        :rtype: dict
+        '''
         with self.__lock:
-            return (h for h in self.__hosts.keys())
+            return {h: (self.get_host(h).user.tp.get_user_state_for_nas()) for h in self.__hosts.keys()}
 #####################################################
 
     def do_exit(self, cmd):
         isinstance(cmd, Command)
         print 'Stop cmd received!!!'
         self.__exit_flag = True
-#####################################################
+    #####################################################
 
     cmd_router = {'stop': do_exit,
                   'do_billing': do_billing,
@@ -288,7 +301,7 @@ class Hosts(Thread):
             except Empty:
                 pass
         print 'Host handler done!!!'
-#####################################################
+    #####################################################
 
     def put_cmd(self, cmd):
         self.__comq.put(cmd)

@@ -1,34 +1,72 @@
 __author__ = 'sn'
-from MySQLdb import connect
+from MySQLdb import Connection
 import json
 
 class TP:
-    def __init__(self, id, name, param):
-        self.__id = id
-        self.__name = name
+    def __init__(self, tp_core, param):
+        """
+        :param tp_core:
+         :type tp_core : TPCore
+        """
+        self.__core = tp_core
+        self.__param = dict()
+        self.json_data = param
 
+    @property
     def have_limit(self):
-        return True
+        return self.__core.have_limit
 
-    def load_data(self, data_json):
+    @property
+    def json_data(self):
+        return json.dumps(self.__param)
+
+    @json_data.setter
+    def json_data(self,txt_data):
         try:
-            tp_data = json.loads(data_json)
+            self.__param = json.loads(txt_data)
         except (ValueError, TypeError):
-            return dict(count_in=0, count_out=0)
-        return tp_data
+            pass
 
-    def save_data(self, data):
-        return json.dumps(data)
+    def get_user_state_for_nas(self):
+        '''
+        :return: tuple (user_is_active, upload_speed, download_speed, filter_number)
+        '''
+        return self.__core.get_state_for_nas(self.__param)
+
+    def calc_traf(self, traf, timestamp):
+        return self.__core.calc_traf(traf, timestamp, self.__param)
+#####################################################################################
+
+
+class TPCore:
+    def __init__(self, tp_id, name, param):
+        self.__id = tp_id
+        self.__name = name
+        self.__limits = False
+        try:
+            self.__param = json.loads(param)
+        except (ValueError, TypeError):
+            self.__param = dict()
+
+    @property
+    def have_limit(self):
+        return self.__limits
 
     def test(self, **karg):
         pass
 
+    def get_state_for_nas(self,base):
+        return (True,None,None,None)
+
     def calc_traf(self, traf, timestamp, base):
-        (bytes_dw, bytes_up) = traf
-        base['count_in'] += bytes_dw
-        base['count_out'] += bytes_up
-
-
+        '''
+        :param traf: (count_up, count_down)
+        :param timestamp: datetime
+        :param base: dict with traffic plan parameters
+        :return: True if user data updated
+        '''
+        return False
+#####################################################################################
 
 
 class TrafPlans:
@@ -40,10 +78,11 @@ class TrafPlans:
         cur.execute('SELECT id, name, param FROM traf_planes')
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
-            self.__tps[r['id']] = TP(r['id'], r['name'], r['param'])
+            self.__tps[r['id']] = TPCore(r['id'], r['name'], r['param'])
         print 'Now %s traf plans loaded...' % len(self.__tps)
 
     def get_tp(self, id):
         return self.__tps[id] if id in self.__tps else None
+
 
 
