@@ -53,8 +53,17 @@ class MikroNas(Nas):
     def _hw_get_hosts_stats_set(self):
         return {h for h in self.__hosts_state.keys() if 'cnt_dw' in self.__hosts_state[h]}
 
-    def _get_reg_hosts_set(self):
-        return {h for h in self.__hosts_state.keys() if 'b_reg' in self.__hosts_state[h]}
+    def _get_hosts_state(self):
+        """
+
+        :rtype : dict
+        """
+        return {h: (True if 'b_act' in self.__hosts_state[h] else False,
+                    self.__hosts_state[h]['b_up']['val'] if 'b_up' in self.__hosts_state[h] else None,
+                    self.__hosts_state[h]['b_dw']['val'] if 'b_dw' in self.__hosts_state[h] else None,
+                    self.__hosts_state[h]['b_fl']['val'] if 'b_fl' in self.__hosts_state[h] else None,)
+                for h in self.__hosts_state.keys() if 'b_reg' in self.__hosts_state[h]}
+
 
     def _get_act_hosts_set(self):
         return {h for h in self.__hosts_state.keys() if 'b_act' in self.__hosts_state[h]}

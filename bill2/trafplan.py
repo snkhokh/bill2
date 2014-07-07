@@ -56,6 +56,10 @@ class TPCore:
         pass
 
     def get_state_for_nas(self,base):
+        '''
+        :param base:
+        :return: tuple (user_is_active, upload_speed, download_speed, filter_number)
+        '''
         return (True,None,None,None)
 
     def calc_traf(self, traf, timestamp, base):
@@ -69,16 +73,24 @@ class TPCore:
 #####################################################################################
 
 
+class TPFixSpeedCore(TPCore):
+    def __init__(self, tp_id, name, param):
+        TPCore.__init__(self, tp_id, name, param)
+
+
 class TrafPlans:
     def __init__(self):
         self.__tps = dict()
 
     def load_all_tps(self, db):
         cur = db.cursor()
-        cur.execute('SELECT id, name, param FROM traf_planes')
+        cur.execute('SELECT id, name, tp_class_name, param FROM traf_planes')
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
-            self.__tps[r['id']] = TPCore(r['id'], r['name'], r['param'])
+            if r['tp_class_name'] in globals():
+                self.__tps[r['id']] = globals()[r['tp_class_name']](r['id'], r['name'], r['param'])
+            else:
+                self.__tps[r['id']] = TPCore(r['id'], r['name'], r['param'])
         print 'Now %s traf plans loaded...' % len(self.__tps)
 
     def get_tp(self, id):

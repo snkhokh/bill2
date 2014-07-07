@@ -46,17 +46,19 @@ class Nas(Thread):
 ############################################################
 
     def update_conf(self, cmd=None):
-        hosts_to_reg = set()
-        hosts_to_unreg = self._get_reg_hosts_set()
+        hosts_to_set = dict()
+        hosts_to_unset = self._get_hosts_state()
         for (h_ip, state) in self.__hosts.get_reg_hosts().items():
-            if h_ip in hosts_to_unreg:
-                hosts_to_unreg.remove(h_ip)
+            if h_ip in hosts_to_unset:
+                hw_state = hosts_to_unset.pop(h_ip)
+                if not hw_state == state:
+                    hosts_to_set[h_ip] = state
             else:
-                hosts_to_reg.add(h_ip)
-        if hosts_to_reg:
-            self._reg_hosts(hosts_to_reg)
-        if hosts_to_unreg:
-            self._unreg_hosts(hosts_to_unreg)
+                hosts_to_set[h_ip] = state
+        if hosts_to_set:
+            self._reg_hosts(hosts_to_set)
+        if hosts_to_unset:
+            self._unreg_hosts(hosts_to_unset)
 #
         Timer(nas_conf_update_period, self.queue_update_conf).start()
 ############################################################
@@ -105,7 +107,7 @@ class Nas(Thread):
     #abstract method
         return set()
 
-    def _get_reg_hosts_set(self):
+    def _get_hosts_state(self):
         pass
 
     def _reg_hosts(self, hosts_to_reg):

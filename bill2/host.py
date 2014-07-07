@@ -270,7 +270,6 @@ class Hosts(Thread):
 
     def get_reg_hosts(self):
         '''
-
         :return: dict { host_id: (host_is_active, upload_speed, download_speed, filter_number)
         :rtype: dict
         '''
