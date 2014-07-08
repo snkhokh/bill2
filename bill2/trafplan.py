@@ -43,10 +43,6 @@ class TPCore:
         self.__id = tp_id
         self.__name = name
         self.__limits = False
-        try:
-            self.__param = json.loads(param)
-        except (ValueError, TypeError):
-            self.__param = dict()
 
     @property
     def have_limit(self):
@@ -76,6 +72,15 @@ class TPCore:
 class TPFixSpeedCore(TPCore):
     def __init__(self, tp_id, name, param):
         TPCore.__init__(self, tp_id, name, param)
+        try:
+            self.__param = json.loads(param)
+        except (ValueError, TypeError):
+            self.__param = dict()
+        self.__up = self.__param['speed_up'] if 'speed_up' in self.__param else None
+        self.__dw = self.__param['speed_dw'] if 'speed_dw' in self.__param else None
+
+    def get_state_for_nas(self, base):
+        return True,self.__up,self.__dw,None
 
 
 class TrafPlans:
