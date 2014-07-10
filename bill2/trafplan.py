@@ -1,5 +1,6 @@
 __author__ = 'sn'
 from MySQLdb import Connection
+from datetime import datetime
 import json
 
 class TP:
@@ -10,7 +11,10 @@ class TP:
         """
         self.__core = tp_core
         self.__param = dict()
-        self.json_data = param
+        try:
+            self.__param = json.loads(param)
+        except (ValueError, TypeError):
+            pass
 
     @property
     def have_limit(self):
@@ -21,7 +25,7 @@ class TP:
         return json.dumps(self.__param)
 
     @json_data.setter
-    def json_data(self,txt_data):
+    def json_data(self, txt_data):
         try:
             self.__param = json.loads(txt_data)
         except (ValueError, TypeError):
@@ -35,6 +39,9 @@ class TP:
 
     def calc_traf(self, traf, timestamp):
         return self.__core.calc_traf(traf, timestamp, self.__param)
+
+    def daily_proc(self, timestamp):
+        return self.__core.daily_proc(timestamp,self.__param)
 #####################################################################################
 
 
@@ -42,14 +49,10 @@ class TPCore:
     def __init__(self, tp_id, name, param):
         self.__id = tp_id
         self.__name = name
-        self.__limits = False
 
     @property
     def have_limit(self):
-        return self.__limits
-
-    def test(self, **karg):
-        pass
+        return False
 
     def get_state_for_nas(self,base):
         '''
@@ -60,12 +63,38 @@ class TPCore:
 
     def calc_traf(self, traf, timestamp, base):
         '''
-        :param traf: (count_up, count_down)
-        :param timestamp: datetime
-        :param base: dict with traffic plan parameters
+        :type traf: tuple(count_up, count_down)
+        :type timestamp: datetime
+        :param base: traffic plan parameters
+        :type base: dict
         :return: True if user data updated
         '''
         return False
+
+    def daily_proc(self,timestamp,base):
+        '''
+        :type timestamp: datetime
+        :type base: dict
+        :return: True if user data updated
+        '''
+        return False
+#####################################################################################
+
+
+class TrafPlans:
+    def __init__(self):
+        self.__tps = dict()
+
+    def load_all_tps(self, db):
+        cur = db.cursor()
+        cur.execute('SELECT id, name, tp_class_name, param FROM traf_planes')
+        for row in cur.fetchall():
+            r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
+            self.__tps[r['id']] = globals().get(r['tp_class_name'], TPCore)(r['id'], r['name'], r['param'])
+        print 'Now %s traf plans loaded...' % len(self.__tps)
+
+    def get_tp(self, tp_id):
+        return self.__tps.get(tp_id, None)
 #####################################################################################
 
 
@@ -80,26 +109,74 @@ class TPFixSpeedCore(TPCore):
         self.__dw = self.__param['speed_dw'] if 'speed_dw' in self.__param else None
 
     def get_state_for_nas(self, base):
-        return True,self.__up,self.__dw,None
+        return True, self.__up, self.__dw, None
+#####################################################################################
 
 
-class TrafPlans:
-    def __init__(self):
-        self.__tps = dict()
+class TPFloatSpeedWithLimitsCore(TPCore):
+    def __init__(self, tp_id, name, param):
+        TPCore.__init__(self, tp_id, name, param)
+        try:
+            self.__param = json.loads(param)
+        except (ValueError, TypeError):
+            self.__param = dict()
+        self.__traf_unit = self.__param.get('traf_unit', 1024 * 1024)
+        self.__up = self.__param.get('speed_up', None)
+        self.__limit_up = self.__param.get('speed_limit_up', None)
+        self.__dw = self.__param.get('speed_dw', None)
+        self.__limit_dw = self.__param.get('speed_limit_dw', None)
+        self.__day_limit = self.__param.get('day_limit', None)
+        self.__week_limit = self.__param.get('week_limit', None)
+        self.__month_limit = self.__param.get('month_limit',None)
+        self.__filter = self.__param.get('filter',None)
 
-    def load_all_tps(self, db):
-        cur = db.cursor()
-        cur.execute('SELECT id, name, tp_class_name, param FROM traf_planes')
-        for row in cur.fetchall():
-            r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
-            if r['tp_class_name'] in globals():
-                self.__tps[r['id']] = globals()[r['tp_class_name']](r['id'], r['name'], r['param'])
-            else:
-                self.__tps[r['id']] = TPCore(r['id'], r['name'], r['param'])
-        print 'Now %s traf plans loaded...' % len(self.__tps)
+    @property
+    def have_limit(self):
+        return self.__day_limit or self.__month_limit or self.__week_limit
 
-    def get_tp(self, id):
-        return self.__tps[id] if id in self.__tps else None
+    def calc_traf(self, traf, timestamp, base):
+        c_dw = traf[1]
+        if c_dw:
+            base['day_counter'] = base.get('day_counter', 0) + c_dw
+            base['week_counter'] = base.get('week_counter', 0) + c_dw
+            base['month_counter'] = base.get('month_counter', 0) + c_dw
+            return True
+        return False
+
+    def get_state_for_nas(self, base):
+        limit = False
+        if self.__day_limit and int(base.get('day_counter', 0)/self.__traf_unit) > self.__day_limit:
+            limit = True
+        elif self.__week_limit and int(base.get('week_counter', 0)/self.__traf_unit) > self.__week_limit:
+            limit = True
+        elif self.__month_limit and int(base.get('month_counter', 0)/self.__traf_unit) > self.__month_limit:
+            limit = True
+        if limit:
+            return True, self.__limit_up, self.__limit_dw, self.__filter
+        return True, self.__up, self.__dw, self.__filter
+
+    def daily_proc(self, timestamp, base):
+        '''
+        :type timestamp: datetime
+        :param base:
+        :return:
+        '''
+        if not 'last_daily_proc' in base:
+            base['last_daily_proc'] = timestamp.toordinal()
+            base['day_counter'] = 0
+            base['week_counter'] = 0
+            base['month_counter'] = 0
+            return True
+        if not base['last_daily_proc'] == timestamp.toordinal():
+            base['last_daily_proc'] = timestamp.toordinal()
+            base['day_counter'] = 0
+            if timestamp.weekday() == 0:
+                base['week_counter'] = 0
+            if timestamp.day == 1:
+                base['month_counter'] = 0
+            return True
+        return False
+#####################################################################################
 
 
 

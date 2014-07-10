@@ -244,8 +244,11 @@ class Hosts(Thread):
                     else:
                         stat_cnt[k] = tuple(c[i] + cnt for (i, cnt) in enumerate(stat_cnt[k]))
                     host.counter_reset()
-                    if host.user.tp.have_limit and host.user.tp.calc_traf(c, now):
-                        upd_users.add(host.user.db_id)
+                    if host.user.tp.have_limit:
+                        if host.user.tp.daily_proc(now):
+                            upd_users.add(host.user.db_id)
+                        if host.user.tp.calc_traf(c, now):
+                            upd_users.add(host.user.db_id)
         cur = self.db.cursor()
         if stat_cnt:
             for k in stat_cnt.keys():
