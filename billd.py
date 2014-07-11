@@ -1,4 +1,6 @@
+#!/usr/bin/python
 __author__ = 'sn'
+
 
 import sys
 from time import sleep
