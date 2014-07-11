@@ -13,11 +13,12 @@ from bill2.config import nases
 
 def __sigTERMhandler(signum, frame):
     print ("Caught signal %d. Exiting" % signum)
+    nas1.putCmd(Command('stop'))
+    h.put_cmd(Command('stop'))
     quit()
 
-
-
 def main():
+    global h,nas1
     print 'Init start ...'
     signal.signal(signal.SIGTERM, __sigTERMhandler)
     signal.signal(signal.SIGINT, __sigTERMhandler)
