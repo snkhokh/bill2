@@ -1,15 +1,15 @@
 #!/usr/bin/python
 __author__ = 'sn'
 
-
-import sys
 from time import sleep
+import signal
+
 from bill2.nas_mikrotik import MikroNas
 from bill2.user import Users
 from bill2.host import Hosts
 from bill2.commands import Command
 from bill2.config import nases
-import signal
+
 
 def __sigTERMhandler(signum, frame):
     print ("Caught signal %d. Exiting" % signum)
