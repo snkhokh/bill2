@@ -24,13 +24,6 @@ class TP:
     def json_data(self):
         return json.dumps(self.__param)
 
-    @json_data.setter
-    def json_data(self, txt_data):
-        try:
-            self.__param = json.loads(txt_data)
-        except (ValueError, TypeError):
-            pass
-
     def get_user_state_for_nas(self):
         '''
         :return: tuple (user_is_active, upload_speed, download_speed, filter_number)
@@ -127,8 +120,8 @@ class TPFloatSpeedWithLimitsCore(TPCore):
         self.__limit_dw = self.__param.get('speed_limit_dw', None)
         self.__day_limit = self.__param.get('day_limit', None)
         self.__week_limit = self.__param.get('week_limit', None)
-        self.__month_limit = self.__param.get('month_limit',None)
-        self.__filter = self.__param.get('filter',None)
+        self.__month_limit = self.__param.get('month_limit', None)
+        self.__filter = self.__param.get('filter', None)
 
     @property
     def have_limit(self):
