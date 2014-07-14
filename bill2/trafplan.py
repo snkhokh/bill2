@@ -1,8 +1,9 @@
 __author__ = 'sn'
-from MySQLdb import Connection
+from util.helpers import  getLogger
 from datetime import datetime
 import json
 
+logSys = getLogger(__name__)
 class TP:
     def __init__(self, tp_core, param):
         """
@@ -84,7 +85,7 @@ class TrafPlans:
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
             self.__tps[r['id']] = globals().get(r['tp_class_name'], TPCore)(r['id'], r['name'], r['param'])
-        print 'Now %s traf plans loaded...' % len(self.__tps)
+        logSys.debug('Now %s traf plans loaded...',len(self.__tps))
 
     def get_tp(self, tp_id):
         return self.__tps.get(tp_id, None)

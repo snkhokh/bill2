@@ -11,7 +11,9 @@ from config import dbhost, dbuser, dbpass, dbname, hosts_billing_proc_period, ho
 from user import Users, User
 from commands import Command
 from util import net
+from util.helpers import getLogger
 
+logSys = getLogger(__name__)
 
 class Host(object):
     def __init__(self, host_ip, lprefix):
@@ -116,7 +118,7 @@ class Hosts(Thread):
         self.__lock = Lock()
         self.__hosts = dict()
         self.load_all_hosts()
-        print 'Hosts created, info about %s hosts loaded...' % len(self.__hosts)
+        logSys.debug('Hosts created, info about %s hosts loaded...',len(self.__hosts))
 
     @property
     def db(self):
@@ -282,7 +284,7 @@ class Hosts(Thread):
 
     def do_exit(self, cmd):
         isinstance(cmd, Command)
-        print 'Stop cmd received!!!'
+        logSys.debug('Stop cmd received!!!')
         self.__exit_flag = True
     #####################################################
 
@@ -291,7 +293,7 @@ class Hosts(Thread):
                   'update_sessions': update_sessions}
 
     def run(self):
-        print 'Host handler started...'
+        logSys.debug('Host handler started...')
         self.queue_update_sessions()
         Timer(hosts_billing_proc_period, self.queue_do_billing).start()
         while not self.__exit_flag:
@@ -299,10 +301,11 @@ class Hosts(Thread):
                 cmd = self.__comq.get(timeout=1)
                 assert isinstance(cmd, Command)
                 if cmd.cmd in self.cmd_router:
+                    logSys.debug('Cmd: %s received',cmd.cmd)
                     self.cmd_router[cmd.cmd](self, cmd.params)
             except Empty:
                 pass
-        print 'Host handler done!!!'
+        logSys.debug('Host handler done!!!')
     #####################################################
 
     def put_cmd(self, cmd):

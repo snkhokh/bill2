@@ -8,7 +8,9 @@ from Queue import Queue, Empty
 from host import Hosts
 from commands import Command
 from config import nas_stat_update_period, nas_conf_update_period
+from util.helpers import getLogger
 
+logSys = getLogger(__name__)
 
 class Nas(Thread):
     def __init__(self, hosts=None):
@@ -71,7 +73,7 @@ class Nas(Thread):
 
     def do_exit(self, cmd):
         isinstance(cmd, Command)
-        print 'Stop cmd received!!!'
+        logSys.debug('top cmd received!!!')
         self.__exit_flag = True
 
     cmd_router = {'stop': do_exit,
@@ -79,7 +81,7 @@ class Nas(Thread):
                   'do_stats': do_stats}
 
     def run(self):
-        print 'Nas started...'
+        logSys.debug('Nas started...')
         self.do_stats()
         self.update_conf()
         while not self.__exit_flag:
@@ -87,10 +89,11 @@ class Nas(Thread):
                 cmd = self.__comq.get(timeout=1)
                 assert isinstance(cmd, Command)
                 if cmd.cmd in Nas.cmd_router:
+                    logSys.debug('Cmd: %s received',cmd.cmd)
                     Nas.cmd_router[cmd.cmd](self, cmd.uid)
             except Empty:
                 pass
-        print 'Nas done!!!'
+        logSys.debug('Nas done!!!')
 
     def putCmd(self, cmd):
         self.__comq.put(cmd)

@@ -5,12 +5,11 @@ from MySQLdb.cursors import Cursor
 from threading import Lock
 from Queue import Queue
 from commands import Command
-import json
-
+from util.helpers import getLogger
 from config import dbhost, dbuser, dbpass, dbname
 from trafplan import TrafPlans, TP
 
-
+logSys = getLogger(__name__)
 
 class Users():
     def __init__(self):
@@ -30,19 +29,13 @@ class Users():
         if user_id in self.__users:
             return self.__users[user_id]
         else:
-            print 'Not found user for user_id: %s' % user_id
+            logSys.error('Not found user for user_id: %s' % user_id)
             return None
 
     def putCmd(self, cmd):
         assert isinstance(cmd, Command)
         self.__comq.put(cmd)
 
-    def run(self):
-        while True:
-            item = self.__comq.get()
-            assert isinstance(item, Command)
-            if item.uid in self.__users:
-                print "Command for user id %s received - %s" % (item.uid, item.cmd)
 
     def load_all_users(self):
         cur = self.__db.cursor()
@@ -51,7 +44,7 @@ class Users():
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
             self.__users[r['uid']] = User(r['uid'], r['name'], TP(self.__tps.get_tp(r['tp_id']), r['tp_data_json']))
-        print 'Now %s users loaded...' % len(self.__users)
+        logSys.debug('Now %s users loaded...',len(self.__users))
 
 
 class User:
