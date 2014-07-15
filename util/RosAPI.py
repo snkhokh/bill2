@@ -1,4 +1,3 @@
-# !/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # RosAPI.py
@@ -25,7 +24,6 @@ class Core:
         self.hostname = hostname
         self.port = port
         self.__ok = True
-        self.__connected = False
         try:
             self.sk = socket.create_connection((self.hostname, self.port), timeout)
         except:
@@ -34,10 +32,6 @@ class Core:
     @property
     def ok(self):
         return self.__ok
-
-    @property
-    def connected(self):
-        return self.__connected
 
     def login(self, username, pwd):
         import binascii
@@ -49,10 +43,9 @@ class Core:
         md.update('\x00')
         md.update(pwd)
         md.update(chal)
-        self.__connected = True
         for repl, attrs in self.talk(["/login", "=name=" + username, "=response=00" + binascii.hexlify(md.digest())]):
             if repl == '!trap':
-                self.__connected = False
+                self.__ok = False
 
     def talk(self, words):
         if self.writeSentence(words) == 0: return

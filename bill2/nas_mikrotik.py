@@ -1,8 +1,10 @@
 __author__ = 'sn355_000'
-from bill2.nas import Nas
-from util.RosAPI import Core,MikrotikConnectError
+from bill2.nas import Nas, NasComError
+from util.RosAPI import Core, MikrotikConnectError
 from threading import Lock
+from util.helpers import getLogger
 
+sysLog = getLogger(__name__)
 
 class MikroNas(Nas):
     def __init__(self, hosts=None, address='', login='', passwd=''):
@@ -11,23 +13,35 @@ class MikroNas(Nas):
         self.__login = login
         self.__pass = passwd
         self.__hw_lock = Lock()
+        self.__hw_nas = None
         self.__hosts_state = None
 
-    def connect(self):
-        self.__hw_nas = Core(self.__addr)
-        if self.__hw_nas.ok:
-            self.__hw_nas.login(self.__login, self.__pass)
-        if not self.__hw_nas.connected:
-            raise MikrotikConnectError
-        self.__hosts_state = self.__get_hw_nas_state
+    @property
+    def _connect(self):
+        if not self._nas_connected:
+            sysLog.debug('Trying connect to nas')
+            with self.__hw_lock:
+                try:
+                    self.__hw_nas = Core(self.__addr)
+                    if self.__hw_nas.ok:
+                        self.__hw_nas.login(self.__login, self.__pass)
+                        if self.__hw_nas.ok:
+                            self.__hosts_state = self.__get_hw_nas_state
+                            self._nas_connected = True
+                            sysLog.debug('connection to nas success')
+                except MikrotikConnectError:
+                    self._nas_connected = False
+            if not self._nas_connected:
+                sysLog.error('connect to nas fail')
+                self.__hw_nas = None
+        return self._nas_connected
 
     def __hw_nas_safe_talk(self, words):
         try:
             return self.__hw_nas.talk(words)
         except MikrotikConnectError:
-            del self.__hw_nas
-            self.connect()
-            return self.__hw_nas.talk(words)
+            sysLog.error('error communication with nas. Raise error.')
+            raise NasComError
 
 
     @property
@@ -68,13 +82,12 @@ class MikroNas(Nas):
                     self.__hosts_state[h]['b_fl']['val'] if 'b_fl' in self.__hosts_state[h] else None,)
                 for h in self.__hosts_state.keys() if 'b_reg' in self.__hosts_state[h]}
 
-
     def _set_addr_list_for_hosts(self, hosts_to_set, name):
         if hosts_to_set:
             with self.__hw_lock:
                 for ip in hosts_to_set:
                     (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/address-list/add', '=list=%s' % name,
-                                                         '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                                                              '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
 
                     if reply == '!done':
                         item_id = param.get('=ret')
@@ -89,7 +102,7 @@ class MikroNas(Nas):
                 self.__hosts_state[ip] = dict()
             if not name in self.__hosts_state[ip]:
                 (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/address-list/add', '=list=%s' % name,
-                                                     '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                                                          '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
                 if reply == '!done':
                     item_id = param.get('=ret')
                     if item_id:
@@ -101,7 +114,7 @@ class MikroNas(Nas):
                 self.__hosts_state[ip] = dict()
             if not name in self.__hosts_state[ip]:
                 (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/address-list/add', '=list=%s%s' % (name, val),
-                                                     '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                                                          '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
                 if reply == '!done':
                     item_id = param.get('=ret')
                     if item_id:
@@ -165,11 +178,10 @@ class MikroNas(Nas):
             self._hw_set_val_addr_list_for_host(ip, 'b_fl', state[3])
         else:
             self._hw_unset_addr_list_for_host(ip, 'b_fl')
-        ###########################################################################################################
+            ###########################################################################################################
 
-
-        ###########################################################################################################
-        # Stats manage
+            ###########################################################################################################
+            # Stats manage
     def _hw_get_hosts_stats_set(self):
         return {h for h in self.__hosts_state.keys() if 'cnt_dw' in self.__hosts_state[h]}
 
@@ -194,13 +206,13 @@ class MikroNas(Nas):
                     if not ip in self.__hosts_state:
                         self.__hosts_state[ip] = dict()
                     (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/filter/add', '=chain=count',
-                                                         '=dst-address=' + ip, '=action=return'))[-1:][0]
+                                                              '=dst-address=' + ip, '=action=return'))[-1:][0]
                     if reply == '!done':
                         item_id = param.get('=ret')
                         if item_id:
                             self.__hosts_state[ip].update({'cnt_dw': {'id': item_id, 'val': 0}})
                     (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/filter/add', '=chain=count',
-                                                         '=src-address=' + ip, '=action=return'))[-1:][0]
+                                                              '=src-address=' + ip, '=action=return'))[-1:][0]
                     if reply == '!done':
                         item_id = param.get('=ret')
                         if item_id:
@@ -233,5 +245,3 @@ class MikroNas(Nas):
             if ids:
                 self.__hw_nas_safe_talk(('/ip/firewall/filter/remove', '=.id=' + ','.join(ids)))
 ###############################################################################################
-
-

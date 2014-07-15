@@ -12,8 +12,9 @@ from util.helpers import getLogger
 
 logSys = getLogger(__name__)
 
+
 class Nas(Thread):
-    def __init__(self, hosts=None):
+    def __init__(self,hosts):
         """
         :type hosts: Hosts
         """
@@ -21,62 +22,72 @@ class Nas(Thread):
         self.__hosts = hosts
         self.__comq = Queue()
         self.__exit_flag = False
+        self._nas_connected = False
 
-    def connect(self):
-        pass
+    @property
+    def _connect(self):
+        if not self._nas_connected:
+            self._nas_connected = True
+        return True
 
-    def do_stats(self,cmd=None):
-        # hosts with nas synchronization
-        hosts_to_set = set()
-        hosts_to_unset = self._hw_get_hosts_stats_set()
-        for h_ip in self.__hosts.get_hosts_needs_stat():
-            if h_ip in hosts_to_unset:
-                hosts_to_unset.remove(h_ip)
-            else:
-                hosts_to_set.add(h_ip)
-        if hosts_to_set:
-            self._hw_set_stats_for_hosts(hosts_to_set)
-        if hosts_to_unset:
-            self._hw_unset_stats_for_hosts(hosts_to_unset)
-        # collect stats and send to hosts
-        self._hw_update_stats()
-        #
-        self.__hosts.update_stat_for_hosts(self._get_hw_stats())
+    def do_stats(self, cmd=None):
+        if self._connect:
+            try:
+                # hosts with nas synchronization
+                hosts_to_set = set()
+                hosts_to_unset = self._hw_get_hosts_stats_set()
+                for h_ip in self.__hosts.get_hosts_needs_stat():
+                    if h_ip in hosts_to_unset:
+                        hosts_to_unset.remove(h_ip)
+                    else:
+                        hosts_to_set.add(h_ip)
+                if hosts_to_set:
+                    self._hw_set_stats_for_hosts(hosts_to_set)
+                if hosts_to_unset:
+                    self._hw_unset_stats_for_hosts(hosts_to_unset)
+                # collect stats and send to hosts
+                self._hw_update_stats()
+                #
+                self.__hosts.update_stat_for_hosts(self._get_hw_stats())
+            except NasComError:
+                self._nas_connected = False
 #
         Timer(nas_stat_update_period, self.queue_do_stats).start()
 ############################################################
 
     def queue_do_stats(self):
-        self.putCmd(Command('do_stats'))
+        self.put_cmd(Command('do_stats'))
 ############################################################
 
     def update_conf(self, cmd=None):
-        hosts_to_set = dict()
-        hosts_to_unset = self._get_hosts_state()
-        for (h_ip, state) in self.__hosts.get_reg_hosts().items():
-            if h_ip in hosts_to_unset:
-                hw_state = hosts_to_unset.pop(h_ip)
-                if not hw_state == state:
-                    hosts_to_set[h_ip] = state
-            else:
-                hosts_to_set[h_ip] = state
-        for (ip, state) in hosts_to_set.items():
-            self._set_host_state(ip, state)
-        for ip in hosts_to_unset.keys():
-            self._unreg_host(ip)
+        if self._connect:
+            try:
+                hosts_to_set = dict()
+                hosts_to_unset = self._get_hosts_state()
+                for (h_ip, state) in self.__hosts.get_reg_hosts().items():
+                    if h_ip in hosts_to_unset:
+                        hw_state = hosts_to_unset.pop(h_ip)
+                        if not hw_state == state:
+                            hosts_to_set[h_ip] = state
+                    else:
+                        hosts_to_set[h_ip] = state
+                for (ip, state) in hosts_to_set.items():
+                    self._set_host_state(ip, state)
+                for ip in hosts_to_unset.keys():
+                    self._unreg_host(ip)
+            except NasComError:
+                self._nas_connected = False
 #
         Timer(nas_conf_update_period, self.queue_update_conf).start()
 ############################################################
 
     def queue_update_conf(self):
-        self.putCmd(Command('update_conf'))
+        self.put_cmd(Command('update_conf'))
 ############################################################
 
 # Command handlers
 
     def do_exit(self, cmd):
-        isinstance(cmd, Command)
-        logSys.debug('top cmd received!!!')
         self.__exit_flag = True
 
     cmd_router = {'stop': do_exit,
@@ -84,8 +95,7 @@ class Nas(Thread):
                   'do_stats': do_stats}
 
     def run(self):
-        logSys.debug('Nas started...')
-        self.connect()
+        logSys.info('Nas started...')
         self.do_stats()
         self.update_conf()
         while not self.__exit_flag:
@@ -93,13 +103,13 @@ class Nas(Thread):
                 cmd = self.__comq.get(timeout=1)
                 assert isinstance(cmd, Command)
                 if cmd.cmd in Nas.cmd_router:
-                    logSys.debug('Cmd: %s received',cmd.cmd)
+                    logSys.debug('Cmd: ''%s'' received', cmd.cmd)
                     Nas.cmd_router[cmd.cmd](self, cmd.uid)
             except Empty:
                 pass
-        logSys.debug('Nas done!!!')
+        logSys.info('Nas done!!!')
 
-    def putCmd(self, cmd):
+    def put_cmd(self, cmd):
         self.__comq.put(cmd)
 
 #Hardware specific functions
@@ -128,3 +138,7 @@ class Nas(Thread):
 
     def _get_hw_stats(self):
         return list()
+
+
+class NasComError(Exception):
+    pass

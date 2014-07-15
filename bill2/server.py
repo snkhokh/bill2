@@ -124,7 +124,7 @@ class Server:
             for t in threading.enumerate():
                 if hasattr(t, 'cancel'):
                     t.cancel()
-        self.__nas1.putCmd(Command('stop'))
+        self.__nas1.put_cmd(Command('stop'))
         self.__hosts.put_cmd(Command('stop'))
         # Only now shutdown the logging.
         try:
