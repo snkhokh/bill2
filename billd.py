@@ -20,8 +20,8 @@ class Bill2Server:
         self.__argv = None
         self.__conf = dict()
         self.__conf["background"] = False
-        self.__conf["socket"] = "/var/run/bill2/bill2.sock"
-        self.__conf["pidfile"] = "/var/run/bill2/bill2.pid"
+        self.__conf["socket"] = "/var/run/bill2.sock"
+        self.__conf["pidfile"] = "/var/run/bill2.pid"
 
     def dispVersion(self):
         print "Bill2 v %s" % version

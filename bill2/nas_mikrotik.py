@@ -1,16 +1,34 @@
 __author__ = 'sn355_000'
 from bill2.nas import Nas
-from util.RosAPI import Core
+from util.RosAPI import Core,MikrotikConnectError
 from threading import Lock
 
 
 class MikroNas(Nas):
     def __init__(self, hosts=None, address='', login='', passwd=''):
         super(MikroNas, self).__init__(hosts)
-        self.__hw_nas = Core(address)
-        self.__hw_nas.login(login, passwd)
+        self.__addr = address
+        self.__login = login
+        self.__pass = passwd
         self.__hw_lock = Lock()
+        self.__hosts_state = None
+
+    def connect(self):
+        self.__hw_nas = Core(self.__addr)
+        if self.__hw_nas.ok:
+            self.__hw_nas.login(self.__login, self.__pass)
+        if not self.__hw_nas.connected:
+            raise MikrotikConnectError
         self.__hosts_state = self.__get_hw_nas_state
+
+    def __hw_nas_safe_talk(self, words):
+        try:
+            return self.__hw_nas.talk(words)
+        except MikrotikConnectError:
+            del self.__hw_nas
+            self.connect()
+            return self.__hw_nas.talk(words)
+
 
     @property
     def __get_hw_nas_state(self):
@@ -55,8 +73,9 @@ class MikroNas(Nas):
         if hosts_to_set:
             with self.__hw_lock:
                 for ip in hosts_to_set:
-                    (reply, param) = self.__hw_nas.talk(('/ip/firewall/address-list/add', '=list=%s' % name,
-                                                        '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                    (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/address-list/add', '=list=%s' % name,
+                                                         '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+
                     if reply == '!done':
                         item_id = param.get('=ret')
                         if item_id:
@@ -69,24 +88,24 @@ class MikroNas(Nas):
             if not ip in self.__hosts_state:
                 self.__hosts_state[ip] = dict()
             if not name in self.__hosts_state[ip]:
-                (reply, param) = self.__hw_nas.talk(('/ip/firewall/address-list/add', '=list=%s' % name,
-                                                    '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/address-list/add', '=list=%s' % name,
+                                                     '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
                 if reply == '!done':
                     item_id = param.get('=ret')
                     if item_id:
-                       self.__hosts_state[ip].update({name: {'id': item_id}})
+                        self.__hosts_state[ip].update({name: {'id': item_id}})
 
     def _hw_set_val_addr_list_for_host(self, ip, name, val):
         with self.__hw_lock:
             if not ip in self.__hosts_state:
                 self.__hosts_state[ip] = dict()
             if not name in self.__hosts_state[ip]:
-                (reply, param) = self.__hw_nas.talk(('/ip/firewall/address-list/add', '=list=%s%s' % (name, val),
-                                                    '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
+                (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/address-list/add', '=list=%s%s' % (name, val),
+                                                     '=address=%s' % ip, '=comment=bill2_dyn'))[-1:][0]
                 if reply == '!done':
                     item_id = param.get('=ret')
                     if item_id:
-                       self.__hosts_state[ip].update({name: {'id': item_id, 'val': val}})
+                        self.__hosts_state[ip].update({name: {'id': item_id, 'val': val}})
 
     def _unset_addr_list_for_hosts(self, hosts_to_unset, name):
         ids = list()
@@ -97,12 +116,12 @@ class MikroNas(Nas):
                         ids.append(self.__hosts_state[ip][name]['id'])
                         self.__hosts_state[ip].pop(name)
             if ids:
-                self.__hw_nas.talk(('/ip/firewall/address-list/remove', '=.id=' + ','.join(ids)))
+                self.__hw_nas_safe_talk(('/ip/firewall/address-list/remove', '=.id=' + ','.join(ids)))
 
     def _hw_unset_addr_list_for_host(self, ip, name):
         with self.__hw_lock:
             if ip in self.__hosts_state and name in self.__hosts_state[ip]:
-                self.__hw_nas.talk(('/ip/firewall/address-list/remove', '=.id=' + self.__hosts_state[ip][name]['id']))
+                self.__hw_nas_safe_talk(('/ip/firewall/address-list/remove', '=.id=' + self.__hosts_state[ip][name]['id']))
                 del self.__hosts_state[ip][name]
 
     def _unreg_host(self, ip):
@@ -146,11 +165,11 @@ class MikroNas(Nas):
             self._hw_set_val_addr_list_for_host(ip, 'b_fl', state[3])
         else:
             self._hw_unset_addr_list_for_host(ip, 'b_fl')
-###########################################################################################################
+        ###########################################################################################################
 
 
-###########################################################################################################
-# Stats manage
+        ###########################################################################################################
+        # Stats manage
     def _hw_get_hosts_stats_set(self):
         return {h for h in self.__hosts_state.keys() if 'cnt_dw' in self.__hosts_state[h]}
 
@@ -159,7 +178,7 @@ class MikroNas(Nas):
                         'dw': int(self.__hosts_state[host]['cnt_dw']['val'])}) for host in self.__hosts_state
                 if 'cnt_up' in self.__hosts_state[host] and 'cnt_dw' in self.__hosts_state[host])
     def _hw_update_stats(self):
-        for item in self.__hw_nas.response_handler(self.__hw_nas.talk(('/ip/firewall/filter/print', '?chain=count'))):
+        for item in self.__hw_nas.response_handler(self.__hw_nas_safe_talk(('/ip/firewall/filter/print', '?chain=count'))):
             try:
                 if 'src-address' in item:
                     self.__hosts_state[item['src-address']]['cnt_up']['val'] = item['bytes']
@@ -174,13 +193,13 @@ class MikroNas(Nas):
                 for ip in hosts_to_set:
                     if not ip in self.__hosts_state:
                         self.__hosts_state[ip] = dict()
-                    (reply, param) = self.__hw_nas.talk(('/ip/firewall/filter/add', '=chain=count',
-                                                        '=dst-address=' + ip, '=action=return'))[-1:][0]
+                    (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/filter/add', '=chain=count',
+                                                         '=dst-address=' + ip, '=action=return'))[-1:][0]
                     if reply == '!done':
                         item_id = param.get('=ret')
                         if item_id:
                             self.__hosts_state[ip].update({'cnt_dw': {'id': item_id, 'val': 0}})
-                    (reply, param) = self.__hw_nas.talk(('/ip/firewall/filter/add', '=chain=count',
+                    (reply, param) = self.__hw_nas_safe_talk(('/ip/firewall/filter/add', '=chain=count',
                                                          '=src-address=' + ip, '=action=return'))[-1:][0]
                     if reply == '!done':
                         item_id = param.get('=ret')
@@ -199,7 +218,7 @@ class MikroNas(Nas):
                         ids.append(self.__hosts_state[ip]['cnt_dw']['id'])
                         self.__hosts_state[ip].pop('cnt_dw')
             if ids:
-                self.__hw_nas.talk(('/ip/firewall/filter/remove', '=.id=' + ','.join(ids)))
+                self.__hw_nas_safe_talk(('/ip/firewall/filter/remove', '=.id=' + ','.join(ids)))
 
     def _hw_unset_stats_for_host(self, ip):
         ids = list()
@@ -212,7 +231,7 @@ class MikroNas(Nas):
                     ids.append(self.__hosts_state[ip]['cnt_dw']['id'])
                     self.__hosts_state[ip].pop('cnt_dw')
             if ids:
-                self.__hw_nas.talk(('/ip/firewall/filter/remove', '=.id=' + ','.join(ids)))
+                self.__hw_nas_safe_talk(('/ip/firewall/filter/remove', '=.id=' + ','.join(ids)))
 ###############################################################################################
 
 

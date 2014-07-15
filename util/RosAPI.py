@@ -1,14 +1,13 @@
 # !/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#       RosAPI.py
+# RosAPI.py
 #       
 #       Copyright 2010 David Jelić <djelic@buksna.net.py>
 #       Copyright 2010 Luka Blašković <lblasc@znode.net.py>
 #       
 
 """Python binding for Mikrotik RouterOS API"""
-__all__ = ["RosAPICore", "Networking"]
 
 
 class Core:
@@ -19,15 +18,26 @@ class Core:
 	
 	Core part is taken mostly from http://wiki.mikrotik.com/wiki/Manual:API#Example_client."""
 
-    def __init__(self, hostname, port=8728, DEBUG=False):
+    def __init__(self, hostname, port=8728, DEBUG=False, timeout=5):
         import socket
 
         self.DEBUG = DEBUG
         self.hostname = hostname
         self.port = port
-        self.currenttag = 0
-        self.sk = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sk.connect((self.hostname, self.port))
+        self.__ok = True
+        self.__connected = False
+        try:
+            self.sk = socket.create_connection((self.hostname, self.port), timeout)
+        except:
+            self.__ok = False
+
+    @property
+    def ok(self):
+        return self.__ok
+
+    @property
+    def connected(self):
+        return self.__connected
 
     def login(self, username, pwd):
         import binascii
@@ -39,7 +49,10 @@ class Core:
         md.update('\x00')
         md.update(pwd)
         md.update(chal)
-        self.talk(["/login", "=name=" + username, "=response=00" + binascii.hexlify(md.digest())])
+        self.__connected = True
+        for repl, attrs in self.talk(["/login", "=name=" + username, "=response=00" + binascii.hexlify(md.digest())]):
+            if repl == '!trap':
+                self.__connected = False
 
     def talk(self, words):
         if self.writeSentence(words) == 0: return
@@ -142,18 +155,30 @@ class Core:
             c += ord(self.readStr(1))
         return c
 
-    def writeStr(self, str):
-        n = 0;
-        while n < len(str):
-            r = self.sk.send(str[n:])
-            if r == 0: raise RuntimeError, "connection closed by remote end"
+    def writeStr(self, s):
+        if not self.ok:
+            raise MikrotikConnectError
+        n = 0
+        while n < len(s):
+            try:
+                r = self.sk.send(s[n:])
+            except:
+                raise MikrotikConnectError
+            if r == 0:
+                raise MikrotikConnectError
             n += r
 
     def readStr(self, length):
+        if not self.ok:
+            raise MikrotikConnectError
         ret = ''
         while len(ret) < length:
-            s = self.sk.recv(length - len(ret))
-            if s == '': raise RuntimeError, "connection closed by remote end"
+            try:
+                s = self.sk.recv(length - len(ret))
+            except:
+                raise MikrotikConnectError
+            if s == '':
+                raise MikrotikConnectError
             ret += s
         return ret
 
@@ -178,52 +203,19 @@ class Core:
                     r.append(element)
         return r
 
-    def run_interpreter(self):
-        import select, sys
 
-        inputsentence = []
-
-        while 1:
-            r = select.select([self.sk, sys.stdin], [], [], None)
-            if self.sk in r[0]:
-                # something to read in socket, read sentence
-                x = self.readSentence()
-
-            if sys.stdin in r[0]:
-                # read line from input and strip off newline
-                l = sys.stdin.readline()
-                l = l[:-1]
-
-                # if empty line, send sentence and start with new
-                # otherwise append to input sentence
-                if l == '':
-                    self.writeSentence(inputsentence)
-                    inputsentence = []
-                else:
-                    inputsentence.append(l)
-        return 0
-
-
-class Networking(Core):
-    """Handles network part of Mikrotik Router OS
-	
-	Contains functions for pulling informations about interfaces,
-	routes, wireless registrations, etc."""
-
-    def get_all_interfaces(self):
-        """Pulls out all available data related to network interfaces"""
-
-        word = ["/interface/print"]
-        response = Core.talk(self, word)
-        response = Core.response_handler(self, response)
-        return response
+class MikrotikConnectError(Exception):
+    pass
 
 
 def test():
-    m = Core('10.128.2.1',DEBUG=True)
-    m.login('billing','751I6R')
-    print m.response_handler(m.talk(('/ip/firewall/filter/print','?chain=count','?src-address=1.2.3.4/31','?dst-address=1.2.3.4/31','?#|')))
-#    print m.response_handler(m.talk(('/ip/firewall/filter/remove','=.id=*18,*1c')))
+    m = Core('10.128.2.1', DEBUG=True)
+    print m.login('billing', '751I6R')
+    print m.response_handler(m.talk(
+        ('/ip/firewall/filter/print', '?chain=count', '?src-address=1.2.3.4/31', '?dst-address=1.2.3.4/31', '?#|')))
+    #    print m.response_handler(m.talk(('/ip/firewall/filter/remove','=.id=*18,*1c')))
+    print m.ok
+
 
 if __name__ == "__main__":
     test()

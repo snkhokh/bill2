@@ -22,6 +22,9 @@ class Nas(Thread):
         self.__comq = Queue()
         self.__exit_flag = False
 
+    def connect(self):
+        pass
+
     def do_stats(self,cmd=None):
         # hosts with nas synchronization
         hosts_to_set = set()
@@ -57,8 +60,8 @@ class Nas(Thread):
                     hosts_to_set[h_ip] = state
             else:
                 hosts_to_set[h_ip] = state
-        for (ip,state) in hosts_to_set.items():
-            self._set_host_state(ip,state)
+        for (ip, state) in hosts_to_set.items():
+            self._set_host_state(ip, state)
         for ip in hosts_to_unset.keys():
             self._unreg_host(ip)
 #
@@ -82,6 +85,7 @@ class Nas(Thread):
 
     def run(self):
         logSys.debug('Nas started...')
+        self.connect()
         self.do_stats()
         self.update_conf()
         while not self.__exit_flag:
