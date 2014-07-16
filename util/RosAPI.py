@@ -10,16 +10,8 @@
 
 
 class Core:
-    """Core part of Router OS API
-	
-	It contains methods necessary to extract raw data from the router.
-	If object is instanced with DEBUG = True parameter, it runs in verbosity mode.
-	
-	Core part is taken mostly from http://wiki.mikrotik.com/wiki/Manual:API#Example_client."""
-
     def __init__(self, hostname, port=8728, DEBUG=False, timeout=5):
         import socket
-
         self.DEBUG = DEBUG
         self.hostname = hostname
         self.port = port

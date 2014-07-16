@@ -273,7 +273,7 @@ class Hosts(Thread):
                     self.__hosts[h].counter = cnt
 #####################################################
 
-    def get_reg_hosts(self):
+    def get_config(self):
         '''
         :return: dict { host_id: (host_is_active, upload_speed, download_speed, filter_number)
         :rtype: dict

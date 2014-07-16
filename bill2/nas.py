@@ -14,7 +14,7 @@ logSys = getLogger(__name__)
 
 
 class Nas(Thread):
-    def __init__(self,hosts):
+    def __init__(self, hosts):
         """
         :type hosts: Hosts
         """
@@ -63,8 +63,8 @@ class Nas(Thread):
         if self._connect:
             try:
                 hosts_to_set = dict()
-                hosts_to_unset = self._get_hosts_state()
-                for (h_ip, state) in self.__hosts.get_reg_hosts().items():
+                hosts_to_unset = self.get_config()
+                for (h_ip, state) in self.__hosts.get_config().items():
                     if h_ip in hosts_to_unset:
                         hw_state = hosts_to_unset.pop(h_ip)
                         if not hw_state == state:
@@ -124,7 +124,7 @@ class Nas(Thread):
     #abstract method
         return set()
 
-    def _get_hosts_state(self):
+    def get_config(self):
         pass
 
     def _set_host_state(self, ip, state):

@@ -72,7 +72,7 @@ class MikroNas(Nas):
                 add_key_to_host(item['dst-address'], {'cnt_dw': {'id': item['.id'], 'val': int(item['bytes'])}})
         return state
 
-    def _get_hosts_state(self):
+    def get_config(self):
         """
         :rtype : dict
         """
