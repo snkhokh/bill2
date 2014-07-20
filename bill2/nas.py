@@ -64,7 +64,7 @@ class Nas(Thread):
             try:
                 hosts_to_set = dict()
                 hosts_to_unset = self.get_config()
-                for (h_ip, state) in self.__hosts.get_config().items():
+                for (h_ip, state) in self.__hosts.prepare_state().items():
                     if h_ip in hosts_to_unset:
                         hw_state = hosts_to_unset.pop(h_ip)
                         if not hw_state == state:

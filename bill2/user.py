@@ -14,7 +14,7 @@ logSys = getLogger(__name__)
 class Users():
     def __init__(self):
         self.__users_lock = Lock()
-        self.__comq = Queue()
+        self.__version = 0
         self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname, use_unicode=True, charset='cp1251')
         self.__tps = TrafPlans()
         self.__tps.load_all_tps(self.__db)
@@ -32,17 +32,14 @@ class Users():
             logSys.error('Not found user for user_id: %s' % user_id)
             return None
 
-    def putCmd(self, cmd):
-        assert isinstance(cmd, Command)
-        self.__comq.put(cmd)
-
-
     def load_all_users(self):
         cur = self.__db.cursor()
         cur.execute(
-            'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json FROM persons')
+            'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json, version FROM persons WHERE NOT deleted')
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
+            if self.__version < r['version']:
+                self.__version = r['version']
             self.__users[r['uid']] = User(r['uid'], r['name'], TP(self.__tps.get_tp(r['tp_id']), r['tp_data_json']))
         logSys.debug('Now %s users loaded...',len(self.__users))
 
