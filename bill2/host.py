@@ -190,6 +190,7 @@ class Hosts():
                     self.__version = h['version']
         finally:
             c.execute('UNLOCK TABLES')
+        logSys.debug('info about %s hosts loaded', len(self.__hosts))
     #####################################################
 
     def update_hosts(self, db):
@@ -203,13 +204,15 @@ class Hosts():
             sql = 'SELECT id, int_ip, mask, PersonId, version, deleted FROM hostip WHERE dynamic = 0 AND version > %s' \
                   ' ORDER BY version'
             c.execute(sql, self.__version)
+            if c.rowcount:
+                logSys.debug('load info about %s updated hosts', c.rowcount)
             for h in ({c.description[i][0]: item for (i, item) in en} for en in
                       (enumerate(row) for row in c.fetchall())):
                 self.__version = h['version']
                 new_host_id = net.ip_ntos(h['int_ip'], h['mask'])
-                old_host_id = self.__dbid_to_hosts.get('id', None)
+                old_host_id = self.__dbid_to_hosts.get(h['id'], None)
                 if old_host_id:
-                    if h['deleted']:
+                    if int(h['deleted']):
                         del self.__hosts[old_host_id]
                         del self.__dbid_to_hosts[h['id']]
                         continue

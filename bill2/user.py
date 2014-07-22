@@ -76,9 +76,11 @@ class Users():
         c = db.cursor()
         try:
             c.execute('LOCK TABLES persons READ')
-            sql = 'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json, version FROM persons' \
-                  ' WHERE dynamic = 0 AND version > %s ORDER BY version'
+            sql = 'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json, version, deleted ' \
+                  'FROM persons WHERE version > %s ORDER BY version'
             c.execute(sql, self.__version)
+            if c.rowcount:
+                logSys.debug('load info about %s updated users', c.rowcount)
             for u in ({c.description[i][0]: item for (i, item) in en} for en in
                       (enumerate(row) for row in c.fetchall())):
                 self.__version = u['version']
@@ -86,7 +88,7 @@ class Users():
                     del self.__users[u['uid']]
                 else:
                     logSys.error('user with id: %s not found in memory!', u['uid'])
-                if u['deleted']:
+                if int(u['deleted']):
                     continue
                 self.__users[u['uid']] = User(u['uid'], u['name'], TP(self.__tps.get_tp(u['tp_id']),
                                                                       u['tp_data_json']))
