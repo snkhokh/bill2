@@ -42,7 +42,6 @@ class SoftWorker(Thread):
 
     def do_exit(self, cmd):
         isinstance(cmd, Command)
-        logSys.debug('Stop cmd received!!!')
         self.__exit_flag = True
     #####################################################
 
