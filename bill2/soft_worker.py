@@ -58,14 +58,14 @@ class SoftWorker(Thread):
         Timer(sessions_update_period, self.queue_update_sessions).start()
     ####################################################
 
-    def do_billing(self, cmd = None):
+    def do_billing(self, cmd=None):
         with self.__lock:
             self.__hosts.do_billing(self.db)
         #
         Timer(billing_process_period, self.queue_do_billing).start()
     ####################################################
 
-    def update_conf(self):
+    def update_conf(self, cmd=None):
         with self.__lock:
             self.__users.update_users(self.db)
             self.__hosts.update_hosts(self.db)

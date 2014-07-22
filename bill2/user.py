@@ -77,7 +77,7 @@ class Users():
         try:
             c.execute('LOCK TABLES persons READ')
             sql = 'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json, version FROM persons' \
-                  ' WHERE dynamic = 0 AND version > %s ORDER BY version'
+                  ' WHERE version > %s ORDER BY version'
             c.execute(sql, self.__version)
             for u in ({c.description[i][0]: item for (i, item) in en} for en in
                       (enumerate(row) for row in c.fetchall())):
