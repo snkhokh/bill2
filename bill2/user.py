@@ -15,11 +15,8 @@ class Users():
     def __init__(self):
         self.__users_lock = Lock()
         self.__version = 0
-        self.__db = Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname, use_unicode=True, charset='cp1251')
         self.__tps = TrafPlans()
-        self.__tps.load_all_tps(self.__db)
         self.__users = dict()
-        self.load_all_users()
 
     def get_user(self, user_id):
         '''
@@ -32,8 +29,13 @@ class Users():
             logSys.error('Not found user for user_id: %s' % user_id)
             return None
 
-    def load_all_users(self):
-        cur = self.__db.cursor()
+    def load_all_users(self,db):
+        '''
+        :type db: Connection
+        :return:
+        '''
+        self.__tps.load_all_tps(db)
+        cur = db.cursor()
         cur.execute(
             'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json, version FROM persons WHERE NOT deleted')
         for row in cur.fetchall():
@@ -47,7 +49,6 @@ class Users():
 class User:
     def __init__(self, uid, name, tp):
         '''
-
         :param uid: user id in db
         :param name: User name
         :param tp: Traf plan

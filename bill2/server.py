@@ -10,6 +10,7 @@ from bill2.host import Hosts
 from bill2.commands import Command
 from bill2.config import nases
 from bill2.version import version
+from bill2.soft_worker import SoftWorker
 import threading
 import logging
 import logging.handlers
@@ -24,16 +25,15 @@ class Server:
     def __init__(self, daemon=False):
         self.__loggingLock = threading.Lock()
         self.__lock = threading.RLock()
-        self.__db = None
         self.__daemon = daemon
         self.__logLevel = None
         self.__logTarget = None
         # Set logging level
         self.setLogLevel("DEBUG")
         self.setLogTarget("SYSLOG")
-        self.__users = None
-        self.__hosts = None
-        self.__nas1 = None
+        self.__soft_worker = SoftWorker()
+        self.__nas1 = MikroNas(hosts=self.__soft_worker, address=nases['m1']['address'], login=nases['m1']['login'],
+                               passwd=nases['m1']['passwd'])
 
     def __sigTERMhandler(self, signum, frame):
         logSys.debug("Caught signal %d. Exiting" % signum)
@@ -80,14 +80,10 @@ class Server:
 
         logSys.debug("Starting communication")
         try:
-            self.__users = Users()
-            self.__hosts = Hosts(self.__users)
-            self.__nas1 = MikroNas(hosts=self.__hosts, address=nases['m1']['address'], login=nases['m1']['login'],
-                                   passwd=nases['m1']['passwd'])
-            self.__hosts.start()
+            self.__soft_worker.start()
             self.__nas1.start()
             #
-            while self.__hosts.isAlive() or self.__nas1.isAlive():
+            while self.__soft_worker.isAlive() or self.__nas1.isAlive():
                 sleep(1)
 
             logSys.info("Exiting Bill2")
@@ -125,7 +121,7 @@ class Server:
                 if hasattr(t, 'cancel'):
                     t.cancel()
         self.__nas1.put_cmd(Command('stop'))
-        self.__hosts.put_cmd(Command('stop'))
+        self.__soft_worker.put_cmd(Command('stop'))
         # Only now shutdown the logging.
         try:
             self.__loggingLock.acquire()

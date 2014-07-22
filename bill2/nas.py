@@ -9,17 +9,19 @@ from host import Hosts
 from commands import Command
 from config import nas_stat_update_period, nas_conf_update_period
 from util.helpers import getLogger
+from bill2.soft_worker import SoftWorker
 
 logSys = getLogger(__name__)
 
 
 class Nas(Thread):
-    def __init__(self, hosts):
+    def __init__(self, soft_worker):
         """
-        :type hosts: Hosts
+        :type soft_worker: SoftWorker
+
         """
         super(Nas, self).__init__()
-        self.__hosts = hosts
+        self.__soft_worker = soft_worker
         self.__comq = Queue()
         self.__exit_flag = False
         self._nas_connected = False
@@ -36,7 +38,7 @@ class Nas(Thread):
                 # hosts with nas synchronization
                 hosts_to_set = set()
                 hosts_to_unset = self._hw_get_hosts_stats_set()
-                for h_ip in self.__hosts.get_hosts_needs_stat():
+                for h_ip in self.__soft_worker.get_hosts_needs_stat():
                     if h_ip in hosts_to_unset:
                         hosts_to_unset.remove(h_ip)
                     else:
@@ -48,7 +50,7 @@ class Nas(Thread):
                 # collect stats and send to hosts
                 self._hw_update_stats()
                 #
-                self.__hosts.update_stat_for_hosts(self._get_hw_stats())
+                self.__soft_worker.update_stat_for_hosts(self._get_hw_stats())
             except NasComError:
                 self._nas_connected = False
 #
@@ -64,7 +66,7 @@ class Nas(Thread):
             try:
                 hosts_to_set = dict()
                 hosts_to_unset = self.get_config()
-                for (h_ip, state) in self.__hosts.prepare_state().items():
+                for (h_ip, state) in self.__soft_worker.prepare_state().items():
                     if h_ip in hosts_to_unset:
                         hw_state = hosts_to_unset.pop(h_ip)
                         if not hw_state == state:
