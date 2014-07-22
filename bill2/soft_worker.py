@@ -1,11 +1,12 @@
 __author__ = 'sn'
 # coding=utf-8
 
-from threading import Thread, Timer
+from threading import Thread, Timer, Lock
 from Queue import Queue, Empty
 from MySQLdb.connections import Connection
 
-from config import dbhost, dbuser, dbpass, dbname, hosts_billing_proc_period, hosts_sessions_update_period
+from config import sessions_update_period, dbhost, dbname, dbpass, billing_process_period, dbuser, \
+    soft_config_update_period
 from commands import Command
 from util.helpers import getLogger
 from bill2.user import Users
@@ -21,7 +22,9 @@ class SoftWorker(Thread):
         self.__hosts = Hosts(self.__users)
         self.__db = None
         self.__comq = Queue()
+        self.__lock = Lock()
         self.__exit_flag = False
+    ####################################################
 
     @property
     def db(self):
@@ -29,15 +32,18 @@ class SoftWorker(Thread):
     ####################################################
 
     def prepare_state(self):
-        return self.__hosts.prepare_state()
+        with self.__lock:
+            return self.__hosts.prepare_state()
     ####################################################
 
     def update_stat_for_hosts(self,hosts):
-        self.__hosts.update_stat_for_hosts(hosts)
+        with self.__lock:
+            self.__hosts.update_stat_for_hosts(hosts)
     ####################################################
 
     def get_hosts_needs_stat(self):
-        return self.__hosts.get_hosts_needs_stat()
+        with self.__lock:
+            return self.__hosts.get_hosts_needs_stat()
     ####################################################
 
     def do_exit(self, cmd):
@@ -46,23 +52,34 @@ class SoftWorker(Thread):
     #####################################################
 
     def update_sessions(self, cmd = None):
-        self.__hosts.update_sessions(self.db)
+        with self.__lock:
+            self.__hosts.update_sessions(self.db)
         #
-        Timer(hosts_sessions_update_period, self.queue_update_sessions).start()
+        Timer(sessions_update_period, self.queue_update_sessions).start()
     ####################################################
 
     def do_billing(self, cmd = None):
-        self.__hosts.do_billing(self.db)
+        with self.__lock:
+            self.__hosts.do_billing(self.db)
         #
-        Timer(hosts_billing_proc_period, self.queue_do_billing).start()
+        Timer(billing_process_period, self.queue_do_billing).start()
+    ####################################################
+
+    def update_conf(self):
+        with self.__lock:
+            self.__users.update_users(self.db)
+            self.__hosts.update_hosts(self.db)
+        Timer(soft_config_update_period, self.queue_update_conf).start()
     ####################################################
 
     def run(self):
-        logSys.debug('billing system core started...')
-        self.__users.load_all_users(self.db)
-        self.__hosts.load_all_hosts(self.db)
+        logSys.debug('billing system core starting...')
+        with self.__lock:
+            self.__users.load_all_users(self.db)
+            self.__hosts.load_all_hosts(self.db)
         self.queue_update_sessions()
         self.queue_do_billing()
+        self.queue_update_conf()
         while not self.__exit_flag:
             try:
                 cmd = self.__comq.get(timeout=1)
@@ -73,6 +90,7 @@ class SoftWorker(Thread):
             except Empty:
                 pass
         logSys.debug('soft configuration handler done!')
+    #####################################################
 
     def put_cmd(self, cmd):
         self.__comq.put(cmd)
@@ -86,8 +104,13 @@ class SoftWorker(Thread):
         self.put_cmd(Command('update_sessions'))
     ####################################################
 
+    def queue_update_conf(self):
+        self.put_cmd(Command('update_conf'))
+    ####################################################
+
     cmd_router = {'stop': do_exit,
                   'do_billing': do_billing,
+                  'update_conf': update_conf,
                   'update_sessions': update_sessions}
 ####################################################
 ####################################################
