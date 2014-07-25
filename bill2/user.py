@@ -18,11 +18,23 @@ class User:
         self.__uid = uid
         self.__name = name
         self.__tp = tp
-        self.__version = 0
 
     @property
     def tp(self):
         return self.__tp
+
+    @tp.setter
+    def tp(self, tp):
+        assert isinstance(tp,TP)
+        self.__tp = tp
+
+    @property
+    def name(self):
+        return self.__name
+
+    @name.setter
+    def name(self, n):
+        self.__name = n
 
     @property
     def db_id(self):
@@ -84,14 +96,20 @@ class Users():
             for u in ({c.description[i][0]: item for (i, item) in en} for en in
                       (enumerate(row) for row in c.fetchall())):
                 self.__version = u['version']
-                if u['uid'] in self.__users:
-                    del self.__users[u['uid']]
-                else:
-                    logSys.error('user with id: %s not found in memory!', u['uid'])
-                if int(u['deleted']):
-                    continue
-                self.__users[u['uid']] = User(u['uid'], u['name'], TP(self.__tps.get_tp(u['tp_id']),
-                                                                      u['tp_data_json']))
+                user = self.__users.get(u['uid'],None)
+                if user:
+                    if int(u['deleted']):
+                        del self.__users[u['uid']]
+                        logSys.debug('delete user with id: %s',u['uid'])
+                        continue
+                    # Init new TP with old data
+                    user.tp = TP(self.__tps.get_tp(u['tp_id']), user.tp.json_data)
+                    user.name = u['name']
+                    logSys.debug('update user with id: %s', u['uid'])
+                elif not int(u['deleted']):
+                    logSys.debug('create new user with id: %s', u['uid'])
+                    self.__users[u['uid']] = User(u['uid'], u['name'], TP(self.__tps.get_tp(u['tp_id']),
+                                                                          u['tp_data_json']))
         finally:
             c.execute('UNLOCK TABLES')
 

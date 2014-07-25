@@ -172,7 +172,7 @@ class Hosts():
         try:
             c.execute('LOCK TABLES hostip READ')
             #
-            sql = 'SELECT id, int_ip, mask, PersonId, version FROM hostip WHERE NOT deleted AND dynamic = 0'
+            sql = 'SELECT id, int_ip, mask, PersonId, version FROM hostip WHERE NOT deleted AND NOT dynamic'
             c.execute(sql)
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
@@ -201,7 +201,7 @@ class Hosts():
         c = db.cursor()
         try:
             c.execute('LOCK TABLES hostip READ')
-            sql = 'SELECT id, int_ip, mask, PersonId, version, deleted FROM hostip WHERE dynamic = 0 AND version > %s' \
+            sql = 'SELECT id, int_ip, mask, PersonId, version, deleted FROM hostip WHERE NOT dynamic AND version > %s' \
                   ' ORDER BY version'
             c.execute(sql, self.__version)
             if c.rowcount:
@@ -213,22 +213,30 @@ class Hosts():
                 old_host_id = self.__dbid_to_hosts.get(h['id'], None)
                 if old_host_id:
                     if int(h['deleted']):
+                        logSys.debug('delete host id: %s', old_host_id)
                         del self.__hosts[old_host_id]
                         del self.__dbid_to_hosts[h['id']]
                         continue
-                    user = self.__users.get_user(h['PersonId'])
                     if new_host_id != old_host_id:
-                        self.__dbid_to_hosts[h['id']] = new_host_id
+                        logSys.debug('host id: %s changed to id: %s', old_host_id, new_host_id)
                         del self.__hosts[old_host_id]
+                        self.__dbid_to_hosts[h['id']] = new_host_id
                         host = Host(h['int_ip'], h['mask'])
                         host.db_id = h['id']
                         self.__hosts[new_host_id] = host
                     else:
+                        logSys.debug('update info for host id: %s', new_host_id)
                         host = self.__hosts[new_host_id]
-                    host.user = user
-                    host.ver = h['version']
+                elif int(h['deleted']):
+                    continue
                 else:
-                    logSys.error('host with db id: %s (new host id: %s) not found!', h['id'], new_host_id)
+                    logSys.debug('new host with id: %s', new_host_id)
+                    self.__dbid_to_hosts[h['id']] = new_host_id
+                    host = Host(h['int_ip'], h['mask'])
+                    host.db_id = h['id']
+                    self.__hosts[new_host_id] = host
+                host.user = self.__users.get_user(h['PersonId'])
+                host.ver = h['version']
         finally:
             c.execute('UNLOCK TABLES')
 

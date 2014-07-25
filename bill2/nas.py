@@ -105,7 +105,7 @@ class Nas(Thread):
                 cmd = self.__comq.get(timeout=1)
                 assert isinstance(cmd, Command)
                 if cmd.cmd in Nas.cmd_router:
-                    logSys.debug('Cmd: ''%s'' received', cmd.cmd)
+                    # logSys.debug('Cmd: ''%s'' received', cmd.cmd)
                     Nas.cmd_router[cmd.cmd](self, cmd.uid)
             except Empty:
                 pass

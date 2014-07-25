@@ -30,6 +30,7 @@ class Server:
         self.__logTarget = None
         # Set logging level
         self.setLogLevel("DEBUG")
+        # self.setLogTarget("STDOUT")
         self.setLogTarget("SYSLOG")
         self.__soft_worker = SoftWorker()
         self.__nas1 = MikroNas(hosts=self.__soft_worker, address=nases['m1']['address'], login=nases['m1']['login'],
