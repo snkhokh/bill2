@@ -129,7 +129,7 @@ class TPFloatSpeedWithLimitsCore(TPCore):
         return self.__day_limit or self.__month_limit or self.__week_limit
 
     def calc_traf(self, traf, timestamp, base):
-        c_dw = traf[1]
+        c_dw = traf[0]
         if c_dw:
             base['day_counter'] = base.get('day_counter', 0) + c_dw
             base['week_counter'] = base.get('week_counter', 0) + c_dw
