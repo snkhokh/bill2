@@ -75,6 +75,14 @@ class SoftWorker(Thread):
     def run(self):
         logSys.debug('billing system core starting...')
         with self.__lock:
+            c = self.db.cursor()
+            try:
+                c.execute('LOCK TABLES persons WRITE, hostip WRITE, traf_planes WRITE')
+                c.execute('UPDATE persons SET version = 0')
+                c.execute('UPDATE hostip SET version = 0')
+                c.execute('UPDATE traf_planes SET version = 0')
+            finally:
+                c.execute('UNLOCK TABLES')
             self.__users.load_all_users(self.db)
             self.__hosts.load_all_hosts(self.db)
         self.queue_update_sessions()

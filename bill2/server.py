@@ -77,9 +77,7 @@ class Server:
         os.write(pid_fd, "%s\n" % os.getpid())
         os.close(pid_fd)
 
-        # Start the communication
-
-        logSys.debug("Starting communication")
+        logSys.debug("Starting handlers")
         try:
             self.__soft_worker.start()
             self.__nas1.start()
