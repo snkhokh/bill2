@@ -5,12 +5,11 @@ import sys
 import errno
 
 from bill2.nas_mikrotik import MikroNas
-from bill2.user import Users
-from bill2.host import Hosts
 from bill2.commands import Command
 from bill2.config import nases
 from bill2.version import version
 from bill2.soft_worker import SoftWorker
+from bill2.tserv import TnetServer
 import threading
 import logging
 import logging.handlers
@@ -35,6 +34,8 @@ class Server:
         self.__soft_worker = SoftWorker()
         self.__nas1 = MikroNas(hosts=self.__soft_worker, address=nases['m1']['address'], login=nases['m1']['login'],
                                passwd=nases['m1']['passwd'])
+        self.__tnserv = TnetServer(self.__soft_worker, self.__nas1)
+
 
     def __sigTERMhandler(self, signum, frame):
         logSys.debug("Caught signal %d. Exiting" % signum)
@@ -81,6 +82,7 @@ class Server:
         try:
             self.__soft_worker.start()
             self.__nas1.start()
+            threading.Thread(target=self.__tnserv.serve_forever).start()
             #
             while self.__soft_worker.isAlive() or self.__nas1.isAlive():
                 sleep(1)
@@ -121,6 +123,7 @@ class Server:
                     t.cancel()
         self.__nas1.put_cmd(Command('stop'))
         self.__soft_worker.put_cmd(Command('stop'))
+        self.__tnserv.shutdown()
         # Only now shutdown the logging.
         try:
             self.__loggingLock.acquire()
