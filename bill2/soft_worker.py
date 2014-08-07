@@ -36,6 +36,9 @@ class SoftWorker(Thread):
     def fget_tps(self,mask):
         return self.__users.fget_tps(mask)
 
+    def fget_users(self,mask):
+        return self.__users.fget_users(mask)
+
     def set_tnserver(self,serv):
         self.__tnserv = serv
 

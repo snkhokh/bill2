@@ -20,6 +20,10 @@ class TP:
         except (ValueError, TypeError):
             pass
 
+    def fget(self):
+        return ('User traf plan - core:',) + self.__core.fget() + ('User traf plan - parameters:',) + \
+               tuple('\t%s -> %s' % i for i in self.__param.items())
+
     @property
     def have_limit(self):
         return self.__core.have_limit
@@ -50,8 +54,13 @@ class TPCore:
         self.__name = name
 
     def __str__(self):
-        return 'Name: %s, class: %s, limits: %s' % (self.__name, self.__class__.__name__, 'Yes' if self.have_limit
-        else 'No')
+        return 'id=%s name=%s class=%s limits=%s' % (self.__id, self.__name, self.__class__.__name__,
+                                                     'yes' if self.have_limit else 'No')
+
+    def fget(self):
+        return '\tName: %s' % self.__name, '\tClass: %s' % self.__class__.__name__, \
+        '\tLimits: %s' % ('Yes' if self.have_limit else 'No')
+
 
     @property
     def have_limit(self):
@@ -103,9 +112,11 @@ class TrafPlans:
 
     def fget_tps(self, mask):
         re_pat = re.compile(mask) if mask else None
-        return ['TP id: %s, content: %s' % (tp_id, s) for tp_id, s in
-                ((tp_id, str(tp)) for tp_id, tp in self.__tps.items())
-                if not re_pat or re_pat.match(s)]
+        retl = list()
+        for tp_id, tp in self.__tps.items():
+            if not re_pat or re_pat.search(str(tp)):
+                retl += ('TP id: %s' % tp_id,) + tp.fget()
+        return retl
 
 
 #####################################################################################
@@ -123,6 +134,9 @@ class TPFixSpeedCore(TPCore):
 
     def get_state_for_nas(self, base):
         return True, self.__up, self.__dw, None
+
+    def fget(self):
+        return TPCore.fget(self) + ('\tSpeed download: %s' % self.__dw, '\tSpeed upload: %s' % self.__up)
 
 
 #####################################################################################
@@ -144,6 +158,26 @@ class TPFloatSpeedWithLimitsCore(TPCore):
         self.__week_limit = self.__param.get('week_limit', None)
         self.__month_limit = self.__param.get('month_limit', None)
         self.__filter = self.__param.get('filter', None)
+
+    def fget(self):
+        retl = TPCore.fget(self) + ('\tTraf unit: %s' % self.__traf_unit, )
+        if self.__up:
+            retl += ('\tUpload speed: %s' % self.__up,)
+        if self.__dw:
+            retl += ('\tDownload speed: %s' % self.__dw,)
+        if self.__limit_up:
+            retl += ('\tLimit upload speed: %s' % self.__limit_up,)
+        if self.__limit_dw:
+            retl += ('\tLimit download speed: %s' % self.__limit_dw,)
+        if self.__day_limit:
+            retl += ('\tLimit for a day: %s' % self.__day_limit,)
+        if self.__week_limit:
+            retl += ('\tLimit for a week: %s' % self.__week_limit,)
+        if self.__month_limit:
+            retl += ('\tLimit for a month: %s' % self.__month_limit,)
+        if self.__filter:
+            retl += ('\tFilter No: %s' % self.__filter,)
+        return retl
 
     @property
     def have_limit(self):

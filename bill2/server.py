@@ -20,6 +20,7 @@ from util.helpers import getLogger
 logSys = getLogger(__name__)
 
 
+
 class Server:
     def __init__(self, daemon=True):
         self.__loggingLock = threading.Lock()
@@ -29,8 +30,10 @@ class Server:
         self.__logTarget = None
         # Set logging level
         self.setLogLevel("DEBUG")
-        # self.setLogTarget("STDOUT")
-        self.setLogTarget("SYSLOG")
+        if not daemon:
+            self.setLogTarget("STDOUT")
+        else:
+            self.setLogTarget("SYSLOG")
         self.__soft_worker = SoftWorker()
         self.__tnserv = None
         self.__nas1 = MikroNas(hosts=self.__soft_worker, address=nases['m1']['address'], login=nases['m1']['login'],

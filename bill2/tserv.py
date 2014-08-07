@@ -4,13 +4,12 @@ import SocketServer
 import time
 import threading
 
-from telnetsrv.threaded import TelnetHandler, command
+from util.tns.threaded import TelnetHandler, command
 import bill2.soft_worker
 from bill2.version import version
 from util.helpers import getLogger
 
 logSys = getLogger(__name__)
-
 
 class CommandHandler(object, TelnetHandler):
     WELCOME = "Bill2 v %s core telnet server" % version
@@ -50,7 +49,7 @@ class CommandHandler(object, TelnetHandler):
         except:
             pass
 
-    @command('print')
+    @command(('print', 'pr'))
     def command_print(self, params):
         '''
         :type params: list
@@ -61,10 +60,13 @@ class CommandHandler(object, TelnetHandler):
             return
         name = params[0]
         if name == 'trafplans':
-            for s in self.__worker.fget_tps(None):
+            for s in self.__worker.fget_tps(params[1] if len(params[1:]) else None):
                 self.writeresponse(s)
         elif name == 'state':
             self.writeresponse(str(self.__worker.prepare_state()))
+        elif name == 'users':
+            for s in self.__worker.fget_users(params[1] if len(params[1:]) else None):
+                self.writeresponse(s)
 
 
 

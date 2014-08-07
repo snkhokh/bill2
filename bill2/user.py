@@ -1,3 +1,5 @@
+import re
+
 __author__ = 'sn'
 
 from MySQLdb.connections import Connection
@@ -40,6 +42,12 @@ class User:
     def db_id(self):
         return self.__uid
 
+    def __str__(self):
+        return 'uid=%s name=%s' % (self.__uid, self.__name)
+
+    def fget(self):
+        return ('Uid: %s' % self.__uid, 'Name: %s' % self.__name) + self.tp.fget()
+
     def db_upd_tp_data(self, c):
         '''
         :param c: db cursor
@@ -63,6 +71,15 @@ class Users():
         else:
             logSys.error('Not found user for user_id: %s' % user_id)
             return None
+
+    def fget_users(self, mask):
+        re_pat = re.compile(mask) if mask else None
+        retl = ()
+        for uid, u in self.__users.items():
+            if not re_pat or re_pat.search(str(u)):
+                retl += u.fget()
+        return retl
+
 
     def load_all_users(self, db):
         '''

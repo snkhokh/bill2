@@ -31,10 +31,12 @@ import curses.ascii
 import curses.has_key
 import curses
 import logging
+
+from util.helpers import getLogger
 #if not hasattr(socket, 'SHUT_RDWR'):
 #    socket.SHUT_RDWR = 2
 
-log = logging.getLogger(__name__)
+log = getLogger(__name__)
 
 BELL = chr(7)
 ESC  = chr(27)
@@ -731,7 +733,7 @@ class TelnetHandlerBase(SocketServer.BaseRequestHandler):
             elif c == chr(10):
                 self._readline_echo(c, echo)
                 result = ''.join(line)
-                if use_history:
+                if use_history and result:
                     self.history.append(result)
                 if echo is False:
                     if prompt:
