@@ -113,3 +113,5 @@ class Users():
         finally:
             c.execute('UNLOCK TABLES')
 
+    def fget_tps(self,mask):
+        return self.__tps.fget_tps(mask)

@@ -21,6 +21,8 @@ class SoftWorker(Thread):
         self.__users = Users()
         self.__hosts = Hosts(self.__users)
         self.__db = None
+        #: :type: TnetServer
+        self.__tnserv = None
         self.__comq = Queue()
         self.__lock = Lock()
         self.__exit_flag = False
@@ -31,20 +33,29 @@ class SoftWorker(Thread):
         return self.__db if isinstance(self.__db,Connection) else Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname)
     ####################################################
 
+    def fget_tps(self,mask):
+        return self.__users.fget_tps(mask)
+
+    def set_tnserver(self,serv):
+        self.__tnserv = serv
+
     def prepare_state(self):
         with self.__lock:
             return self.__hosts.prepare_state()
-    ####################################################
+            ####################################################
+
 
     def update_stat_for_hosts(self,hosts):
         with self.__lock:
             self.__hosts.update_stat_for_hosts(hosts)
-    ####################################################
+            ####################################################
+
 
     def get_hosts_needs_stat(self):
         with self.__lock:
             return self.__hosts.get_hosts_needs_stat()
-    ####################################################
+            ####################################################
+
 
     def do_exit(self, cmd):
         isinstance(cmd, Command)
@@ -121,4 +132,9 @@ class SoftWorker(Thread):
                   'update_conf': update_conf,
                   'update_sessions': update_sessions}
 ####################################################
+from bill2.tserv import TnetServer
 ####################################################
+
+
+
+

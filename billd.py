@@ -19,7 +19,7 @@ class Bill2Server:
         self.__server = None
         self.__argv = None
         self.__conf = dict()
-        self.__conf["background"] = False
+        self.__conf["background"] = True
         self.__conf["socket"] = "/var/run/bill2.sock"
         self.__conf["pidfile"] = "/var/run/bill2.pid"
 

@@ -5,15 +5,19 @@ import time
 import threading
 
 from telnetsrv.threaded import TelnetHandler, command
+import bill2.soft_worker
+from bill2.version import version
+from util.helpers import getLogger
 
-from bill2.soft_worker import SoftWorker, Hosts, Users
+logSys = getLogger(__name__)
+
 
 class CommandHandler(object, TelnetHandler):
-    WELCOME = "Billing core server"
+    WELCOME = "Bill2 v %s core telnet server" % version
 
     def __init__(self, request, client_address, server):
         self.__close_flag = False
-        #: :type: SoftWorker
+        assert isinstance(server.worker, bill2.soft_worker.SoftWorker)
         self.__worker = server.worker
         self.__nas = server.nas
         TelnetHandler.__init__(self, request, client_address, server)
@@ -46,14 +50,22 @@ class CommandHandler(object, TelnetHandler):
         except:
             pass
 
-    @command(['state'])
-    def command_get_state(self, params):
-        '''<>
-        Print state of worker object.
-
+    @command('print')
+    def command_print(self, params):
         '''
-        a = self.__worker.prepare_state()
-        self.writeresponse(str(a))
+        :type params: list
+        :return:
+        '''
+        if not len(params):
+            self.writeerror('arguments need!')
+            return
+        name = params[0]
+        if name == 'trafplans':
+            for s in self.__worker.fget_tps(None):
+                self.writeresponse(s)
+        elif name == 'state':
+            self.writeresponse(str(self.__worker.prepare_state()))
+
 
 
 class TnetServer(SocketServer.ThreadingTCPServer):
@@ -67,15 +79,18 @@ class TnetServer(SocketServer.ThreadingTCPServer):
         self.__handlers_list = []
         self.worker = sw_worker
         self.nas = hw_worker
+        sw_worker.set_tnserver(self)
+        logSys.debug('Create socket server')
         SocketServer.ThreadingTCPServer.__init__(self, ('0.0.0.0', 23), CommandHandler)
 
     def shutdown(self):
+        logSys.debug('Shutdown socket server')
         SocketServer.ThreadingTCPServer.shutdown(self)
         with self.__handlers_lock:
             for h in self.__handlers_list:
                 h.close()
 
-    def append_handler(self,handler):
+    def append_handler(self, handler):
         with self.__handlers_lock:
             self.__handlers_list.append(handler)
 
@@ -83,7 +98,7 @@ class TnetServer(SocketServer.ThreadingTCPServer):
         with self.__handlers_lock:
             self.__handlers_list.remove(handler)
 
-    def msg_to_all(self,txt):
+    def msg_to_all(self, txt):
         with self.__handlers_lock:
             for h in self.__handlers_list:
                 assert isinstance(h, CommandHandler)

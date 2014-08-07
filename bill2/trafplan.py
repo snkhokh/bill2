@@ -1,9 +1,12 @@
 __author__ = 'sn'
-from util.helpers import  getLogger
+from util.helpers import getLogger
 from datetime import datetime
 import json
+import re
 
 logSys = getLogger(__name__)
+
+
 class TP:
     def __init__(self, tp_core, param):
         """
@@ -35,8 +38,10 @@ class TP:
         return self.__core.calc_traf(traf, timestamp, self.__param)
 
     def daily_proc(self, timestamp):
-        return self.__core.daily_proc(timestamp,self.__param)
-#####################################################################################
+        return self.__core.daily_proc(timestamp, self.__param)
+
+
+# ####################################################################################
 
 
 class TPCore:
@@ -44,16 +49,20 @@ class TPCore:
         self.__id = tp_id
         self.__name = name
 
+    def __str__(self):
+        return 'Name: %s, class: %s, limits: %s' % (self.__name, self.__class__.__name__, 'Yes' if self.have_limit
+        else 'No')
+
     @property
     def have_limit(self):
         return False
 
-    def get_state_for_nas(self,base):
+    def get_state_for_nas(self, base):
         '''
         :param base:
         :return: tuple (user_is_active, upload_speed, download_speed, filter_number)
         '''
-        return (True,None,None,None)
+        return (True, None, None, None)
 
     def calc_traf(self, traf, timestamp, base):
         '''
@@ -65,14 +74,16 @@ class TPCore:
         '''
         return False
 
-    def daily_proc(self,timestamp,base):
+    def daily_proc(self, timestamp, base):
         '''
         :type timestamp: datetime
         :type base: dict
         :return: True if user data updated
         '''
         return False
-#####################################################################################
+
+
+# ####################################################################################
 
 
 class TrafPlans:
@@ -85,10 +96,18 @@ class TrafPlans:
         for row in cur.fetchall():
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
             self.__tps[r['id']] = globals().get(r['tp_class_name'], TPCore)(r['id'], r['name'], r['param'])
-        logSys.debug('Now %s traf plans loaded...',len(self.__tps))
+        logSys.debug('Now %s traf plans loaded...', len(self.__tps))
 
     def get_tp(self, tp_id):
         return self.__tps.get(tp_id, None)
+
+    def fget_tps(self, mask):
+        re_pat = re.compile(mask) if mask else None
+        return ['TP id: %s, content: %s' % (tp_id, s) for tp_id, s in
+                ((tp_id, str(tp)) for tp_id, tp in self.__tps.items())
+                if not re_pat or re_pat.match(s)]
+
+
 #####################################################################################
 
 
@@ -104,6 +123,8 @@ class TPFixSpeedCore(TPCore):
 
     def get_state_for_nas(self, base):
         return True, self.__up, self.__dw, None
+
+
 #####################################################################################
 
 
@@ -139,11 +160,11 @@ class TPFloatSpeedWithLimitsCore(TPCore):
 
     def get_state_for_nas(self, base):
         limit = False
-        if self.__day_limit and int(base.get('day_counter', 0)/self.__traf_unit) > self.__day_limit:
+        if self.__day_limit and int(base.get('day_counter', 0) / self.__traf_unit) > self.__day_limit:
             limit = True
-        elif self.__week_limit and int(base.get('week_counter', 0)/self.__traf_unit) > self.__week_limit:
+        elif self.__week_limit and int(base.get('week_counter', 0) / self.__traf_unit) > self.__week_limit:
             limit = True
-        elif self.__month_limit and int(base.get('month_counter', 0)/self.__traf_unit) > self.__month_limit:
+        elif self.__month_limit and int(base.get('month_counter', 0) / self.__traf_unit) > self.__month_limit:
             limit = True
         if limit:
             return True, self.__limit_up, self.__limit_dw, self.__filter
@@ -170,6 +191,7 @@ class TPFloatSpeedWithLimitsCore(TPCore):
                 base['month_counter'] = 0
             return True
         return False
+
 #####################################################################################
 
 

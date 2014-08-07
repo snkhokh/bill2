@@ -21,7 +21,7 @@ logSys = getLogger(__name__)
 
 
 class Server:
-    def __init__(self, daemon=False):
+    def __init__(self, daemon=True):
         self.__loggingLock = threading.Lock()
         self.__lock = threading.RLock()
         self.__daemon = daemon
@@ -32,9 +32,9 @@ class Server:
         # self.setLogTarget("STDOUT")
         self.setLogTarget("SYSLOG")
         self.__soft_worker = SoftWorker()
+        self.__tnserv = None
         self.__nas1 = MikroNas(hosts=self.__soft_worker, address=nases['m1']['address'], login=nases['m1']['login'],
                                passwd=nases['m1']['passwd'])
-        self.__tnserv = TnetServer(self.__soft_worker, self.__nas1)
 
 
     def __sigTERMhandler(self, signum, frame):
@@ -82,6 +82,7 @@ class Server:
         try:
             self.__soft_worker.start()
             self.__nas1.start()
+            self.__tnserv = TnetServer(self.__soft_worker, self.__nas1)
             threading.Thread(target=self.__tnserv.serve_forever).start()
             #
             while self.__soft_worker.isAlive() or self.__nas1.isAlive():
