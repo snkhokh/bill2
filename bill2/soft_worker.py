@@ -35,12 +35,19 @@ class SoftWorker(Thread):
 
     def fget_tps(self,mask):
         return self.__users.fget_tps(mask)
+    ####################################################
 
     def fget_users(self,mask):
         return self.__users.fget_users(mask)
+    ####################################################
+
+    def fget_hosts(self,mask):
+        return self.__hosts.fget_hosts(mask)
+    ####################################################
 
     def set_tnserver(self,serv):
         self.__tnserv = serv
+    ####################################################
 
     def prepare_state(self):
         with self.__lock:

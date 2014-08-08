@@ -67,6 +67,9 @@ class CommandHandler(object, TelnetHandler):
         elif name == 'users':
             for s in self.__worker.fget_users(params[1] if len(params[1:]) else None):
                 self.writeresponse(s)
+        elif name == 'hosts':
+            for s in self.__worker.fget_hosts(params[1] if len(params[1:]) else None):
+                self.writeresponse(s)
 
 
 

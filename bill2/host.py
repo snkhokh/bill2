@@ -1,4 +1,6 @@
 # coding=utf-8
+import re
+
 __author__ = 'sn'
 
 from threading import Lock
@@ -36,6 +38,9 @@ class Host(object):
         self.is_ppp = False
         self.session_ver = 0
     ####################################################
+
+    def __str__(self):
+        return 'ip=%s id=%s uid=%s ppp=%s' % (self.ip_s, self.db_id, self.user.db_id, 'yes' if self.is_ppp else 'no')
 
     @property
     def db_id(self):
@@ -135,6 +140,12 @@ class Hosts():
         :rtype: Host
         '''
         return self.__hosts[host_id]
+    ####################################################
+
+    def fget_hosts(self, mask):
+        re_pat = re.compile(mask) if mask else None
+        return tuple(str(h) for hid, h in self.__hosts.items() if not re_pat or re_pat.search(str(h)))
+
     ####################################################
 
     def get_hosts_needs_stat(self):
