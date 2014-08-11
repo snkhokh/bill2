@@ -217,12 +217,14 @@ class TPFloatSpeedWithLimitsCore(TPCore):
             base['month_counter'] = 0
             return True
         if not base['last_daily_proc'] == timestamp.toordinal():
+            old_date = timestamp.fromordinal(base['last_daily_proc'])
             base['last_daily_proc'] = timestamp.toordinal()
             base['day_counter'] = 0
-            if timestamp.weekday() == 0:
+            if old_date.year != timestamp.year or old_date.month != timestamp.month:
                 base['week_counter'] = 0
-            if timestamp.day == 1:
                 base['month_counter'] = 0
+            elif old_date.isocalendar()[1] != timestamp.isocalendar()[1]:
+                base['week_counter'] = 0
             return True
         return False
 
