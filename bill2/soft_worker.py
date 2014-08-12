@@ -43,7 +43,10 @@ class SoftWorker(Thread):
     ####################################################
 
     def fget_users(self,mask):
-        return self.__users.fget(mask)
+        if mask:
+            return self.__users.fget(mask) + self.__hosts.fget(mask)
+        else:
+            return self.__users.fget(mask)
     ####################################################
 
     def fget_hosts(self,mask):

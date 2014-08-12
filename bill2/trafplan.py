@@ -23,7 +23,8 @@ class TP:
 
     def fget(self):
         return ('User traf plan - core:',) + self.__core.fget() + ('User traf plan - parameters:',) + \
-            tuple('\t%s -> %s' % i for i in self.__param.items())
+            tuple('\t%s -> %s' % i for i in self.__param.items()) +\
+               ('Current flags: %s' % str(self.get_user_state_for_nas()),)
     ####################################################
 
     @property
