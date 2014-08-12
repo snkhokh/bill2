@@ -19,52 +19,60 @@ class TP:
             self.__param = json.loads(param)
         except (ValueError, TypeError):
             pass
+    ####################################################
 
     def fget(self):
         return ('User traf plan - core:',) + self.__core.fget() + ('User traf plan - parameters:',) + \
-               tuple('\t%s -> %s' % i for i in self.__param.items())
+            tuple('\t%s -> %s' % i for i in self.__param.items())
+    ####################################################
 
     @property
     def have_limit(self):
         return self.__core.have_limit
+    ####################################################
 
     @property
     def json_data(self):
         return json.dumps(self.__param)
+    ####################################################
 
     def get_user_state_for_nas(self):
         '''
         :return: tuple (user_is_active, upload_speed, download_speed, filter_number)
         '''
         return self.__core.get_state_for_nas(self.__param)
+    ####################################################
 
     def calc_traf(self, traf, timestamp):
         return self.__core.calc_traf(traf, timestamp, self.__param)
+    ####################################################
 
     def daily_proc(self, timestamp):
         return self.__core.daily_proc(timestamp, self.__param)
-
-
-# ####################################################################################
+    ####################################################
+    ####################################################
 
 
 class TPCore:
     def __init__(self, tp_id, name, param):
         self.__id = tp_id
         self.__name = name
+    ####################################################
 
     def __str__(self):
         return 'id=%s name=%s class=%s limits=%s' % (self.__id, self.__name, self.__class__.__name__,
                                                      'yes' if self.have_limit else 'No')
+    ####################################################
 
     def fget(self):
         return '\tName: %s' % self.__name, '\tClass: %s' % self.__class__.__name__, \
-        '\tLimits: %s' % ('Yes' if self.have_limit else 'No')
-
+            '\tLimits: %s' % ('Yes' if self.have_limit else 'No')
+    ####################################################
 
     @property
     def have_limit(self):
         return False
+    ####################################################
 
     def get_state_for_nas(self, base):
         '''
@@ -72,6 +80,7 @@ class TPCore:
         :return: tuple (user_is_active, upload_speed, download_speed, filter_number)
         '''
         return (True, None, None, None)
+    ####################################################
 
     def calc_traf(self, traf, timestamp, base):
         '''
@@ -82,6 +91,7 @@ class TPCore:
         :return: True if user data updated
         '''
         return False
+    ####################################################
 
     def daily_proc(self, timestamp, base):
         '''
@@ -90,14 +100,24 @@ class TPCore:
         :return: True if user data updated
         '''
         return False
+    ####################################################
+    ####################################################
 
-
-# ####################################################################################
 
 
 class TrafPlans:
     def __init__(self):
         self.__tps = dict()
+    ####################################################
+
+    def __iter__(self):
+        return self.__tps.keys().__iter__()
+    ####################################################
+
+    def __getitem__(self, item):
+        ''' :rtype: TPCore '''
+        return self.__tps.get(item, TPCore)
+    ####################################################
 
     def load_all_tps(self, db):
         cur = db.cursor()
@@ -106,20 +126,17 @@ class TrafPlans:
             r = {cur.description[n][0]: item for (n, item) in enumerate(row)}
             self.__tps[r['id']] = globals().get(r['tp_class_name'], TPCore)(r['id'], r['name'], r['param'])
         logSys.debug('Now %s traf plans loaded...', len(self.__tps))
+    ####################################################
 
-    def get_tp(self, tp_id):
-        return self.__tps.get(tp_id, None)
-
-    def fget_tps(self, mask):
+    def fget(self, mask):
         re_pat = re.compile(mask) if mask else None
         retl = list()
         for tp_id, tp in self.__tps.items():
             if not re_pat or re_pat.search(str(tp)):
                 retl += ('TP id: %s' % tp_id,) + tp.fget()
         return retl
-
-
-#####################################################################################
+    ####################################################
+    ####################################################
 
 
 class TPFixSpeedCore(TPCore):
@@ -131,15 +148,16 @@ class TPFixSpeedCore(TPCore):
             self.__param = dict()
         self.__up = self.__param['speed_up'] if 'speed_up' in self.__param else None
         self.__dw = self.__param['speed_dw'] if 'speed_dw' in self.__param else None
+    ####################################################
 
     def get_state_for_nas(self, base):
         return True, self.__up, self.__dw, None
+    ####################################################
 
     def fget(self):
         return TPCore.fget(self) + ('\tSpeed download: %s' % self.__dw, '\tSpeed upload: %s' % self.__up)
-
-
-#####################################################################################
+    ####################################################
+    ####################################################
 
 
 class TPFloatSpeedWithLimitsCore(TPCore):
@@ -158,6 +176,7 @@ class TPFloatSpeedWithLimitsCore(TPCore):
         self.__week_limit = self.__param.get('week_limit', None)
         self.__month_limit = self.__param.get('month_limit', None)
         self.__filter = self.__param.get('filter', None)
+    ####################################################
 
     def fget(self):
         retl = TPCore.fget(self) + ('\tTraf unit: %s' % self.__traf_unit, )
@@ -178,10 +197,12 @@ class TPFloatSpeedWithLimitsCore(TPCore):
         if self.__filter:
             retl += ('\tFilter No: %s' % self.__filter,)
         return retl
+    ####################################################
 
     @property
     def have_limit(self):
         return self.__day_limit or self.__month_limit or self.__week_limit
+    ####################################################
 
     def calc_traf(self, traf, timestamp, base):
         c_dw = traf[0]
@@ -191,6 +212,7 @@ class TPFloatSpeedWithLimitsCore(TPCore):
             base['month_counter'] = base.get('month_counter', 0) + c_dw
             return True
         return False
+    ####################################################
 
     def get_state_for_nas(self, base):
         limit = False
@@ -203,6 +225,7 @@ class TPFloatSpeedWithLimitsCore(TPCore):
         if limit:
             return True, self.__limit_up, self.__limit_dw, self.__filter
         return True, self.__up, self.__dw, self.__filter
+    ####################################################
 
     def daily_proc(self, timestamp, base):
         '''
@@ -227,8 +250,5 @@ class TPFloatSpeedWithLimitsCore(TPCore):
                 base['week_counter'] = 0
             return True
         return False
-
-#####################################################################################
-
-
-
+    ####################################################
+    ####################################################

@@ -71,6 +71,28 @@ class CommandHandler(object, TelnetHandler):
             for s in self.__worker.fget_hosts(params[1] if len(params[1:]) else None):
                 self.writeresponse(s)
 
+    @command('server')
+    def command_server(self,params):
+        '''
+        :param params:
+        :return:
+        '''
+        if not len(params):
+            self.writeerror('arguments need!')
+            return
+        if params[0] == 'reload':
+            if not len(params[1:]):
+                self.writeerror('arguments need!')
+                return
+            name = params[1]
+            if name == 'trafplans':
+                self.__worker.reload_tps()
+            elif name == 'all':
+                self.__worker.reload_config()
+            else:
+                self.writeerror('Unknown argument: %s !' % name)
+        else:
+            self.writeerror('Unknown argument: %s !' % params[0])
 
 
 class TnetServer(SocketServer.ThreadingTCPServer):

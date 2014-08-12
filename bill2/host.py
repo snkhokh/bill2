@@ -121,7 +121,7 @@ class Host(object):
 ####################################################
 
 
-class Hosts():
+class Hosts(object):
     def __init__(self, users):
         '''
         :type users: Users
@@ -133,16 +133,16 @@ class Hosts():
         self.__dbid_to_hosts = dict()
     ####################################################
 
-    def get_host(self, host_id):
-        '''
-        :param host_id:
-        :return:
-        :rtype: Host
-        '''
-        return self.__hosts[host_id]
+    def __iter__(self):
+        return self.__hosts.keys().__iter__()
     ####################################################
 
-    def fget_hosts(self, mask):
+    def __getitem__(self, item):
+        ''' :rtype: Host '''
+        return self.__hosts[item]
+    ####################################################
+
+    def fget(self, mask):
         re_pat = re.compile(mask) if mask else None
         return tuple(str(h) for hid, h in self.__hosts.items() if not re_pat or re_pat.search(str(h)))
 
@@ -176,7 +176,7 @@ class Hosts():
                 host = self.__hosts[host_id]
                 host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
                 host.counter_reset()
-            host.user = self.__users.get_user(h['acc_uid'])
+            host.user = self.__users[h['acc_uid']]
             host.pool_id = h['ip_pool_id']
             host.session_ver = h['version']
             #
@@ -191,7 +191,7 @@ class Hosts():
                 self.__dbid_to_hosts[h['id']] = host_id
                 if not host_id in self.__hosts:
                     host = Host(h['int_ip'], h['mask'])
-                    host.user = self.__users.get_user(h['PersonId'])
+                    host.user = self.__users[h['PersonId']]
                     self.__hosts[host_id] = host
                 else:
                     host = self.__hosts[host_id]
@@ -246,7 +246,7 @@ class Hosts():
                     host = Host(h['int_ip'], h['mask'])
                     host.db_id = h['id']
                     self.__hosts[new_host_id] = host
-                host.user = self.__users.get_user(h['PersonId'])
+                host.user = self.__users[h['PersonId']]
                 host.ver = h['version']
         finally:
             c.execute('UNLOCK TABLES')
@@ -276,7 +276,7 @@ class Hosts():
                 host = self.__hosts[host_id]
             if not old_ver or not old_ver == h['version']:
                 host.is_ppp = True
-                host.user = self.__users.get_user(h['acc_uid'])
+                host.user = self.__users[h['acc_uid']]
                 host.session_ver = h['version']
                 host.pool_id = h['ip_pool_id']
             elif old_ver and not old_ver == h['version']:
@@ -289,38 +289,6 @@ class Hosts():
             self.__hosts[host_id].session_ver = 0
     ####################################################
 
-    def do_billing(self, db):
-        '''
-        :type db: Connection
-        :return:
-        '''
-        now = datetime.datetime.now()
-        stat_cnt = dict()
-        upd_users = set()
-        for host_id in self.__hosts:
-            host = self.__hosts[host_id]
-            c = host.counter
-            if c[0] + c[1]:
-                k = (host.user.db_id, host.db_id)
-                if not k in stat_cnt:
-                    stat_cnt[k] = c
-                else:
-                    stat_cnt[k] = tuple(c[i] + cnt for (i, cnt) in enumerate(stat_cnt[k]))
-                host.counter_reset()
-                if host.user.tp.have_limit:
-                    if host.user.tp.daily_proc(now):
-                        upd_users.add(host.user.db_id)
-                    if host.user.tp.calc_traf(c, now):
-                        upd_users.add(host.user.db_id)
-        cur = db.cursor()
-        if stat_cnt:
-            for k in stat_cnt.keys():
-                cur.execute('INSERT INTO stat (user_id, host_id, ts, dw, up) VALUES (%s, %s, %s, %s, %s)',
-                            k + (now,) + stat_cnt[k])
-        for user_id in upd_users:
-            self.__users.get_user(user_id).db_upd_tp_data(cur)
-    #####################################################
-
     def update_stat_for_hosts(self, hosts):
         for h, cnt in hosts:
             if h in self.__hosts and not self.__hosts[h].is_ppp:
@@ -332,5 +300,5 @@ class Hosts():
         :return: dict { host_id: (host_is_active, upload_speed, download_speed, filter_number)
         :rtype: dict
         '''
-        return {h: (self.get_host(h).user.tp.get_user_state_for_nas()) for h in self.__hosts.keys()}
+        return {h: (self[h].user.tp.get_user_state_for_nas()) for h in self}
     #####################################################
