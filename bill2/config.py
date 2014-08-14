@@ -1,6 +1,6 @@
 __author__ = 'sn'
 
-dbhost = 'host.kchgta.ru'
+dbhost = '10.128.1.2'
 dbname = 'traf'
 dbuser = 'traf'
 dbpass = ''

@@ -166,19 +166,21 @@ class Hosts(object):
         for row in c.fetchall():
             h = {c.description[n][0]: item for (n, item) in enumerate(row)}
             host_id = h['host_ip']
-            if not host_id in self.__hosts:
-                host = Host(*net.ip_ston(h['host_ip']))
-                self.__hosts[host_id] = host
-                host.is_ppp = True
-                host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
-            elif h['version'] >= self.__hosts[host_id].session_ver:
-                # новая сессия от уже обработанного IP
-                host = self.__hosts[host_id]
-                host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
-                host.counter_reset()
-            host.user = self.__users[h['acc_uid']]
-            host.pool_id = h['ip_pool_id']
-            host.session_ver = h['version']
+            user = self.__users[h['acc_uid']]
+            if user:
+                if not host_id in self.__hosts:
+                    host = Host(*net.ip_ston(h['host_ip']))
+                    self.__hosts[host_id] = host
+                    host.is_ppp = True
+                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                elif h['version'] >= self.__hosts[host_id].session_ver:
+                    # новая сессия от уже обработанного IP
+                    host = self.__hosts[host_id]
+                    host.counter = dict(dw=h['out_octets'], up=h['in_octets'])
+                    host.counter_reset()
+                host.user = user
+                host.pool_id = h['ip_pool_id']
+                host.session_ver = h['version']
             #
         try:
             c.execute('LOCK TABLES hostip READ')
