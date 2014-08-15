@@ -160,7 +160,7 @@ class Hosts(object):
         c = db.cursor()
         # загрузим инфу о сессиях
         sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
-              'acc_uid,unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
+              'acc_uid, acc_hid, unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
               ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
         c.execute(sql)
         for row in c.fetchall():
@@ -182,14 +182,23 @@ class Hosts(object):
                 host.pool_id = h['ip_pool_id']
                 host.session_ver = h['version']
             #
+        logSys.debug('info about %s hosts loaded', len(self.__hosts))
+    #####################################################
+
+    def update_hosts(self, db):
+        '''
+        :type db: Connection
+        :return:
+        '''
+        c = db.cursor()
         try:
             c.execute('LOCK TABLES hostip READ')
             #
-            sql = 'SELECT id, int_ip, mask, PersonId, version FROM hostip WHERE NOT deleted AND NOT dynamic'
+            sql = 'SELECT id, int_ip, mask, Name, dynamic, flags, PersonId, version FROM hostip WHERE NOT deleted'
             c.execute(sql)
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                host_id = net.ip_ntos(h['int_ip'], h['mask'])
+                host = Host(_id = net.ip_ntos(h['int_ip'], h['mask'])
                 self.__dbid_to_hosts[h['id']] = host_id
                 if not host_id in self.__hosts:
                     host = Host(h['int_ip'], h['mask'])
@@ -203,15 +212,6 @@ class Hosts(object):
                     self.__version = h['version']
         finally:
             c.execute('UNLOCK TABLES')
-        logSys.debug('info about %s hosts loaded', len(self.__hosts))
-    #####################################################
-
-    def update_hosts(self, db):
-        '''
-        :type db: Connection
-        :return:
-        '''
-        c = db.cursor()
         try:
             c.execute('LOCK TABLES hostip READ')
             sql = 'SELECT id, int_ip, mask, PersonId, version, deleted FROM hostip WHERE NOT dynamic AND version > %s' \
