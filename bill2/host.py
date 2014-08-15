@@ -16,7 +16,7 @@ logSys = getLogger(__name__)
 
 
 class Host(object):
-    def __init__(self, host_ip, lprefix):
+    def __init__(self, db_id, person_id, name='', ip=0, mask=32, dynamic=0, pool=0):
         # check ip and mask before create host
         m1 = 32 - lprefix
         ip = host_ip >> m1
@@ -158,6 +158,27 @@ class Hosts(object):
         :return:
         '''
         c = db.cursor()
+        try:
+            c.execute('LOCK TABLES hostip READ')
+            #
+            sql = 'SELECT id, int_ip, mask, Name, dynamic, flags, PersonId, version FROM hostip WHERE NOT deleted'
+            c.execute(sql)
+            for row in c.fetchall():
+                h = {c.description[n][0]: item for (n, item) in enumerate(row)}
+                host = Host(_id = net.ip_ntos(h['int_ip'], h['mask'])
+                self.__dbid_to_hosts[h['id']] = host_id
+                if not host_id in self.__hosts:
+                    host = Host(h['int_ip'], h['mask'])
+                    host.user = self.__users[h['PersonId']]
+                    self.__hosts[host_id] = host
+                else:
+                    host = self.__hosts[host_id]
+                host.db_id = h['id']
+                host.ver = h['version']
+                if self.__version < h['version']:
+                    self.__version = h['version']
+        finally:
+            c.execute('UNLOCK TABLES')
         # загрузим инфу о сессиях
         sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
               'acc_uid, acc_hid, unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
@@ -191,27 +212,6 @@ class Hosts(object):
         :return:
         '''
         c = db.cursor()
-        try:
-            c.execute('LOCK TABLES hostip READ')
-            #
-            sql = 'SELECT id, int_ip, mask, Name, dynamic, flags, PersonId, version FROM hostip WHERE NOT deleted'
-            c.execute(sql)
-            for row in c.fetchall():
-                h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                host = Host(_id = net.ip_ntos(h['int_ip'], h['mask'])
-                self.__dbid_to_hosts[h['id']] = host_id
-                if not host_id in self.__hosts:
-                    host = Host(h['int_ip'], h['mask'])
-                    host.user = self.__users[h['PersonId']]
-                    self.__hosts[host_id] = host
-                else:
-                    host = self.__hosts[host_id]
-                host.db_id = h['id']
-                host.ver = h['version']
-                if self.__version < h['version']:
-                    self.__version = h['version']
-        finally:
-            c.execute('UNLOCK TABLES')
         try:
             c.execute('LOCK TABLES hostip READ')
             sql = 'SELECT id, int_ip, mask, PersonId, version, deleted FROM hostip WHERE NOT dynamic AND version > %s' \
