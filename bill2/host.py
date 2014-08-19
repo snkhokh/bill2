@@ -15,6 +15,48 @@ from util.helpers import getLogger
 logSys = getLogger(__name__)
 
 
+
+class IpLists(object):
+    def __init__(self, default_nas=0):
+        self.__default_nas = default_nas
+        self.__nas_ip_list = dict(default_nas=dict())
+    ####################################################
+
+    def __setitem__(self, key, value):
+        self.__nas_ip_list[self.__default_nas][key] = value
+    ####################################################
+
+    def __getitem__(self, key):
+        return self.__nas_ip_list[self.__default_nas].get(key)
+    ####################################################
+
+    def __delitem__(self, key):
+        if key in self.__nas_ip_list[self.__default_nas]:
+            del self.__nas_ip_list[self.__default_nas]
+    ####################################################
+
+    def setip(self,nas,ip,value):
+        if not nas in self.__nas_ip_list:
+            self.__nas_ip_list[nas] = dict()
+        self.__nas_ip_list[nas][ip] = value
+    ####################################################
+
+    def getip(self,nas,ip):
+        if not nas in self.__nas_ip_list or not ip in self.__nas_ip_list[nas]:
+            return None
+        else:
+            return self.__nas_ip_list[nas][ip]
+    ####################################################
+
+    def delip(self,nas,ip):
+        if nas in self.__nas_ip_list and ip in self.__nas_ip_list[nas]:
+            del self.__nas_ip_list[nas][ip]
+    ####################################################
+    ####################################################
+
+
+
+
 class IP(object):
     def __init__(self, addr, mask=32, session_ver=0):
         m1 = 32 - mask
@@ -59,35 +101,29 @@ class IP(object):
 
     def counter_reset(self):
         self.__count_is_set = False
-####################################################
+    ####################################################
+    ####################################################
 
 
-class Host(object):
+class Host(dict):
     def __init__(self, db_id, name, user, flags, version, pool=0):
         ''' :type user: User '''
         self.db_id = db_id
         self.pool_id = pool
         self.ver = version
+        self.name = name
+        self.flags = flags
         self.__user = user
-        self.__name = name
-        self.__flags = flags
         self.__count_in = 0
         self.__count_out = 0
         self.__ips = dict()
     ####################################################
 
-    def __iter__(self):
-        return self.__ips.keys().__iter__()
-    ####################################################
-
-    def __getitem__(self, item):
-        ''' :rtype: IP '''
-        return self.__ips.get(item)
-    ####################################################
-
-    def __setitem__(self, key, value):
-        ''' :type value: IP '''
-        self.__ips[key] = value
+    def __getitem__(self, key):
+        '''
+        :rtype: IP
+        '''
+        return self.get(key)
     ####################################################
 
     @property
@@ -103,40 +139,44 @@ class Host(object):
     ####################################################
 
 
-class Hosts(object):
+class Hosts(dict):
     def __init__(self, users):
         '''
         :type users: Users
         '''
+        self.__ip_lists = IpLists()
         self.__users = users
         self.__version = 0
         self.__sessions_ver = 0
-        self.__hosts = dict()
         self.__dbid_to_hosts = dict()
     ####################################################
 
-    def __iter__(self):
-        return self.__hosts.keys().__iter__()
+    @property
+    def users(self):
+        return self.__users
     ####################################################
 
-    def __getitem__(self, item):
-        ''' :rtype: Host '''
-        return self.__hosts.get(item)
+    def __getitem__(self, key):
+        '''
+        :rtype: Host
+        '''
+        return super(Hosts, self).__getitem__(key)
     ####################################################
 
     def __setitem__(self, key, value):
         assert isinstance(value, Host)
-        self.__hosts[key] = value
+        self[key] = value
     ####################################################
 
     def fget(self, mask):
         re_pat = re.compile(mask) if mask else None
-        return tuple(str(h) for hid, h in self.__hosts.items() if not re_pat or re_pat.search(str(h)))
+        return tuple(str(h) for hid, h in self.items() if not re_pat or re_pat.search(str(h)))
 
     ####################################################
 
     def get_hosts_needs_stat(self):
-        return (ip for h in self.__hosts for ip in h if not ip.ver)
+        return (ip for h in self for ip in h if not ip.ver)
+
     #####################################################
 
     def load_all_hosts(self, db):
@@ -149,14 +189,16 @@ class Hosts(object):
             c.execute(sql)
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-                user = self.__users[h['PersonId']]
+                user = self.users[h['PersonId']]
                 if user:
                     if int(h['dynamic']):
                         self[h['id']] = Host(h['id'], h['Name'], user, h['flags'], h['version'], h['int_ip'])
                     else:
                         host = Host(h['id'], h['Name'], user, h['flags'], h['version'])
-                        host[net.ip_ntos(h['int_ip'], h['mask'])] = IP(h['int_ip'], h['mask'])
+                        ip = IP(h['int_ip'], h['mask'])
+                        host[net.ip_ntos(h['int_ip'], h['mask'])] = ip
                         self[h['id']] = host
+                        self.__ip_lists[ip.ip_s] = host
                 if self.__version < h['version']:
                     self.__version = h['version']
             # загрузим инфу о сессиях
@@ -170,7 +212,9 @@ class Hosts(object):
                 if host and host.user.db_id == h['acc_uid']:
                     ip_id = net.ip_ntos(h['framed_ip'])
                     if not ip_id in host:
-                        host[ip_id] = IP(h['framed_ip'], 32, h['version'])
+                        ip = IP(h['framed_ip'], 32, h['version'])
+                        host[ip_id] = ip
+                        self.__ip_lists[ip.ip.ip_s] = host
                     elif h['version'] >= host[ip_id].ver:
                         host[ip_id].counter_reset()
                     host[ip_id].get_delta(dict(dw=h['out_octets'], up=h['in_octets']))
@@ -196,57 +240,96 @@ class Hosts(object):
             for h in ({c.description[i][0]: item for (i, item) in en} for en in
                       (enumerate(row) for row in c.fetchall())):
                 self.__version = h['version']
-                if h['id'] in self:
+                host = self[h['id']]
+                user = self.users[h['PersonId']]
+                dynamic = int(h['dynamic'])
+                if host:
                     if int(h['deleted']):
-                        logSys.debug('delete host id: %s', old_host_id)
-                        del self.__hosts[h['id']]
+                        logSys.debug('delete host id: %s', h['id'])
+                        for ip in self[h['id']]:
+                            del self.__ip_lists[ip]
+                        del self[h['id']]
                         continue
-                    if new_host_id != old_host_id:
-                        logSys.debug('host id: %s changed to id: %s', old_host_id, new_host_id)
-                        del self.__hosts[old_host_id]
-                        self.__dbid_to_hosts[h['id']] = new_host_id
-                        host = Host(h['int_ip'], h['mask'])
-                        host.db_id = h['id']
-                        self.__hosts[new_host_id] = host
+                    host.name = h['Name']
+                    host.flags = h['flags']
+                    host.ver = h['version']
+                    if user and host.user.db_id != user.db_id:
+                        host.user = user
+                    if host.pool_id:
+                        #  хост был на динамике
+                        if not dynamic:
+                            # изменение на статику
+                            for ip in host:
+                                del self.__ip_lists[ip]
+                            host.clear()
+                            host[net.ip_ntos(h['int_ip'], h['mask'])] = IP(h['int_ip'], h['mask'])
+                            host.pool_id = 0
+                        elif host.pool_id != h['int_ip']:
+                            # изменился номер пула
+                            host.pool_id = h['int_ip']
                     else:
-                        logSys.debug('update info for host id: %s', new_host_id)
-                        host = self.__hosts[new_host_id]
+                        # хост был на статике
+                        if dynamic:
+                            # изменение на динамику
+                            for ip in host:
+                                del self.__ip_lists[ip]
+                            host.clear()
+                            host.pool_id = h['int_ip']
+                        elif host[host.keys()[0]].ip_n != (h['int_ip'], h['mask']):
+                            # изменение ip статической записи
+                            ip_id = host.keys()[0]
+                            del host[ip_id]
+                            del self.__ip_lists[ip_id]
+                            ip = IP(h['int_ip'], h['mask'])
+                            host[ip.ip_s] = ip
+                            self.__ip_lists[ip.ip.ip_s] = host
                 elif int(h['deleted']):
                     continue
-                else:
-                    logSys.debug('new host with id: %s', new_host_id)
-                    self.__dbid_to_hosts[h['id']] = new_host_id
-                    host = Host(h['int_ip'], h['mask'])
-                    host.db_id = h['id']
-                    self.__hosts[new_host_id] = host
-                host.user = self.__users[h['PersonId']]
-                host.ver = h['version']
+                elif user:
+                    logSys.debug('new host with id: %s', h['id'])
+                    if dynamic:
+                        self[h['id']] = Host(h['id'], h['Name'], user, h['flags'], h['version'], h['int_ip'])
+                    else:
+                        host = Host(h['id'], h['Name'], user, h['flags'], h['version'])
+                        ip = IP(h['int_ip'], h['mask'])
+                        host[net.ip_ntos(h['int_ip'], h['mask'])] = ip
+                        self[h['id']] = host
+                        self.__ip_lists[ip.ip_s] = host
         finally:
             c.execute('UNLOCK TABLES')
-
+    #####################################################
 
     def update_sessions(self, db):
         '''
         :type db: Connection
-        :return:
         '''
         c = db.cursor()
-        assert isinstance(c, Cursor)
-        sql = 'SELECT ip_pool_id,framed_ip AS host_ip,in_octets,out_octets,' \
-              'acc_uid,unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
+        sessions = {ip.ip_s: ip.ver for h in self for ip in h if ip.ver}
+        sql = 'SELECT ip_pool_id,framed_ip,in_octets,out_octets,' \
+              'acc_uid, acc_hid, unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
               ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
         c.execute(sql)
-        sessions = {item: self.__hosts[item].session_ver for item in self.__hosts.keys()
-                    if self.__hosts[item].session_ver}
         for row in c.fetchall():
             h = {c.description[n][0]: item for (n, item) in enumerate(row)}
-            host_id = h['host_ip']
-            old_ver = sessions.pop(host_id) if host_id in sessions else None
-            if not host_id in self.__hosts:
-                host = Host(*net.ip_ston(h['host_ip']))
-                self.__hosts[host_id] = host
-            else:
-                host = self.__hosts[host_id]
+            host = self[h['acc_hid']]
+            user = self.users[h['acc_uid']]
+            if user and host and user.db_id == host.user.db_id:
+                ip_id = h['framed_ip']
+                old_ver = sessions.pop(ip_id) if ip_id in sessions else None
+                if host.pool_id:
+                    # динамический адрес
+                    if not ip_id in host:
+                        if ip_id in self.__ip_lists:
+                            del self.__ip_lists[ip_id][ip_id]
+                        ip = IP(h['framed_ip'], 32, h['version'])
+                        host[ip_id] = ip
+                        self.__ip_lists[ip_id] = host
+                    elif old_ver and old_ver != h['version']:
+                        # новая сессия
+                        host[ip_id].counter_reset()
+                else:
+                    # статический адрес
+                    host = self.__hosts[host_id]
             if not old_ver or not old_ver == h['version']:
                 host.is_ppp = True
                 host.user = self.__users[h['acc_uid']]
