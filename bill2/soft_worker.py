@@ -48,22 +48,22 @@ class SoftWorker(Thread):
         return self.__users
     ####################################################
 
-    def fget_tps(self,mask):
+    def fget_tps(self, mask):
         return self.__tps.fget(mask)
     ####################################################
 
-    def fget_users(self,mask):
+    def fget_users(self, mask):
         if mask:
             return self.__users.fget(mask) + self.__hosts.fget(mask)
         else:
             return self.__users.fget(mask)
     ####################################################
 
-    def fget_hosts(self,mask):
+    def fget_hosts(self, mask):
         return self.__hosts.fget(mask)
     ####################################################
 
-    def set_tnserver(self,serv):
+    def set_tnserver(self, serv):
         self.__tnserv = serv
     ####################################################
 
@@ -207,7 +207,9 @@ if __name__ == "__main__":
         sw.hosts.update(sw.db)
         sw.hosts.sessions_update(sw.db)
         sw.do_billing()
-        print sw.hosts.prepare_state()
+        print sw.fget_users('')
+        print sw.fget_hosts('')
+        print sw.fget_tps('')
         time.sleep(5)
     exit()
 

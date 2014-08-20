@@ -216,7 +216,7 @@ class Hosts(object):
 
     def fget(self, mask):
         re_pat = re.compile(mask) if mask else None
-        return tuple(str(ip) for h in self for ip in h if not re_pat or re_pat.search(str(ip)))
+        return tuple(str(self[h][ip]) for h in self for ip in self[h] if not re_pat or re_pat.search(str(self[h][ip])))
     ####################################################
 
     def get_hosts_needs_stat(self):
@@ -245,11 +245,12 @@ class Hosts(object):
                         self.__ip_lists[ip.ip_s] = host
                 if self.__version < h['version']:
                     self.__version = h['version']
-            # загрузим инфу о сессиях
+                    # загрузим инфу о сессиях
+
             sql = 'SELECT ip_pool_id, INET_ATON(framed_ip) AS int_ip, in_octets, out_octets, ' \
                   'acc_uid, acc_hid, unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
-                  ' AND 1'
-                  # ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+                  ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+                # ' AND 1'
             c.execute(sql)
             for row in c.fetchall():
                 h = {c.description[n][0]: item for (n, item) in enumerate(row)}
@@ -355,8 +356,8 @@ class Hosts(object):
         sessions = {self[h][ip].ip_s: self[h][ip].ver for h in self for ip in self[h] if self[h][ip].ver}
         sql = 'SELECT ip_pool_id,INET_ATON(framed_ip) AS int_ip,in_octets,out_octets,' \
               'acc_uid, acc_hid, unix_timestamp(start_time) AS version FROM ip_sessions WHERE stop_time IS NULL' \
-              ' AND 1'
-              # ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+              ' AND l_update > date_sub(now(),INTERVAL 6 MINUTE)'
+              # ' AND 1'
         c.execute(sql)
         for row in c.fetchall():
             h = {c.description[n][0]: item for (n, item) in enumerate(row)}
@@ -393,7 +394,8 @@ class Hosts(object):
     def update_stat_for_hosts(self, stat_data):
         for ip, cnt in stat_data:
             if ip in self.__ip_lists and not self.__ip_lists[ip][ip].ver:
-                self.__ip_lists[ip].counter = cnt
+                host = self.__ip_lists[ip]
+                host.counter = host[ip].get_delta(cnt['dw'],cnt['up'])
     #####################################################
 
     def prepare_state(self):
