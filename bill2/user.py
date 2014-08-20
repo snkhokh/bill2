@@ -106,7 +106,7 @@ class Users():
         logSys.debug('Now %s users loaded...',len(self.__users))
     ####################################################
 
-    def update_users(self, db):
+    def update(self, db):
         ''' :type db: Connection '''
         c = db.cursor()
         try:

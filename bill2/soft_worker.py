@@ -38,6 +38,16 @@ class SoftWorker(Thread):
             else Connection(host=dbhost, user=dbuser, passwd=dbpass, db=dbname)
     ####################################################
 
+    @property
+    def hosts(self):
+        return self.__hosts
+    ####################################################
+
+    @property
+    def users(self):
+        return self.__users
+    ####################################################
+
     def fget_tps(self,mask):
         return self.__tps.fget(mask)
     ####################################################
@@ -79,9 +89,9 @@ class SoftWorker(Thread):
         self.__exit_flag = True
     #####################################################
 
-    def update_sessions(self, cmd = None):
+    def sessions_update(self, cmd=None):
         with self.__lock:
-            self.__hosts.update_sessions(self.db)
+            self.hosts.sessions_update(self.db)
         #
         Timer(sessions_update_period, self.queue_update_sessions).start()
     ####################################################
@@ -91,36 +101,33 @@ class SoftWorker(Thread):
             now = datetime.datetime.now()
             stat_cnt = dict()
             upd_users = set()
-            for host_id in self.__hosts:
-                host = self.__hosts[host_id]
+            for host in (self.hosts[host_id] for host_id in self.hosts
+                         if self.hosts[host_id].counter[0]+self.hosts[host_id].counter[1]):
                 c = host.counter
-                if c[0] + c[1]:
-                    k = (host.user.db_id, host.db_id)
-                    if not k in stat_cnt:
-                        stat_cnt[k] = c
-                    else:
-                        stat_cnt[k] = tuple(c[i] + cnt for (i, cnt) in enumerate(stat_cnt[k]))
-                    host.counter_reset()
-                    if host.user.tp.have_limit:
-                        if host.user.tp.daily_proc(now):
-                            upd_users.add(host.user.db_id)
-                        if host.user.tp.calc_traf(c, now):
-                            upd_users.add(host.user.db_id)
+                stat_cnt[host.db_id] = c
+                host.counter_reset()
+                if host.user.tp.have_limit:
+                    if host.user.tp.daily_proc(now):
+                        upd_users.add(host.user.db_id)
+                    if host.user.tp.calc_traf(c, now):
+                        upd_users.add(host.user.db_id)
             cur = self.db.cursor()
             if stat_cnt:
-                for k in stat_cnt.keys():
+                for host_id in stat_cnt:
+                    host = self.hosts[host_id]
                     cur.execute('INSERT INTO stat (user_id, host_id, ts, dw, up) VALUES (%s, %s, %s, %s, %s)',
-                                k + (now,) + stat_cnt[k])
+                                (host.user.db_id, host.db_id, now) + stat_cnt[host_id])
             for user_id in upd_users:
-                self.__users[user_id].db_upd_tp_data(cur)
+                self.users[user_id].db_upd_tp_data(cur)
     #
-        Timer(billing_process_period, self.queue_do_billing).start()
+        if __name__ != '__main__':
+            Timer(billing_process_period, self.queue_do_billing).start()
     ####################################################
 
     def update_conf(self, cmd=None):
         with self.__lock:
-            self.__users.update_users(self.db)
-            self.__hosts.update_hosts(self.db)
+            self.users.update(self.db)
+            self.hosts.update(self.db)
         Timer(soft_config_update_period, self.queue_update_conf).start()
     ####################################################
 
@@ -175,7 +182,7 @@ class SoftWorker(Thread):
     cmd_router = {'stop': do_exit,
                   'do_billing': do_billing,
                   'update_conf': update_conf,
-                  'update_sessions': update_sessions}
+                  'update_sessions': sessions_update}
     ####################################################
 
     def load_from_db(self):
@@ -191,15 +198,18 @@ class SoftWorker(Thread):
 ####################################################
 
 if __name__ == "__main__":
+    import time
     dbname = 'traf_test'
     sw = SoftWorker()
     sw.load_from_db()
-    sw.update_sessions()
+    while 1:
+        sw.users.update(sw.db)
+        sw.hosts.update(sw.db)
+        sw.hosts.sessions_update(sw.db)
+        sw.do_billing()
+        print sw.hosts.prepare_state()
+        time.sleep(5)
     exit()
-
-
-
-
 
 from bill2.tserv import TnetServer
 ####################################################

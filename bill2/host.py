@@ -27,7 +27,12 @@ class IpLists(object):
     ####################################################
 
     def __getitem__(self, key):
+        ''' :rtype: Host '''
         return self.__nas_ip_list[self.__default_nas].get(key)
+    ####################################################
+
+    def __iter__(self):
+        return self.__nas_ip_list[self.__default_nas].__iter__()
     ####################################################
 
     def __delitem__(self, key):
@@ -215,7 +220,7 @@ class Hosts(object):
     ####################################################
 
     def get_hosts_needs_stat(self):
-        return (ip for h in self if not h.pool_id for ip in h if not ip.ver)
+        return (ip for hid in self if not self[hid].pool_id for ip in self[hid] if not self[hid][ip].ver)
     #####################################################
 
     def load_all_hosts(self, db):
@@ -267,7 +272,7 @@ class Hosts(object):
         logSys.debug('info about %s hosts loaded', len(self.__hosts))
     #####################################################
 
-    def update_hosts(self, db):
+    def update(self, db):
         '''
         :type db: Connection
         :return:
@@ -342,7 +347,7 @@ class Hosts(object):
             c.execute('UNLOCK TABLES')
     #####################################################
 
-    def update_sessions(self, db):
+    def sessions_update(self, db):
         '''
         :type db: Connection
         '''
@@ -365,37 +370,30 @@ class Hosts(object):
             host = self[h['acc_hid']]
             user = self.users[h['acc_uid']]
             if user and host and user.db_id == host.user.db_id:
-                if host.pool_id:
-                    # динамический адрес
-                    if not ip_id in host:
-                        if ip_id in self.__ip_lists:
-                            del self.__ip_lists[ip_id][ip_id]
-                        ip = IP(h['int_ip'], 32, h['version'])
-                        host[ip_id] = ip
-                        self.__ip_lists[ip_id] = host
-                    elif old_ver < h['version']:
+                if host.pool_id and not ip_id in host:
+                    # создание нового динамического ip
+                    if ip_id in self.__ip_lists:
+                        del self.__ip_lists[ip_id][ip_id]
+                    host[ip_id] = IP(h['int_ip'], 32, h['version'])
+                    self.__ip_lists[ip_id] = host
+                if ip_id in host:
+                    ip = host[ip_id]
+                    if old_ver < h['version']:
                         # новая сессия
-                        host[ip_id].counter_reset()
-                        host[ip_id].ver = h['version']
-                    if host[ip_id].ver == h['version']:
-                        host.counter = host[ip_id].get_delta(h['out_octets'], h['in_octets'])
-                else:
-                    # статический адрес
-                    if ip_id in host:
-                        if old_ver < h['version']:
-                            host[ip_id].counter_reset()
-                            host[ip_id].ver = h['version']
-                        if host[ip_id].ver == h['version']:
-                            host.counter = host[ip_id].get_delta(h['out_octets'], h['in_octets'])
+                        ip.counter_reset()
+                        ip.ver = h['version']
+                        ip.get_delta(0,0)
+                    if ip.ver == h['version']:
+                        host.counter = ip.get_delta(h['out_octets'], h['in_octets'])
         for host_id in sessions:
             # для этих хостов сессия звыершена
             self.__ip_lists[host_id][host_id].ver = 0
     ####################################################
 
-    def update_stat_for_hosts(self, hosts):
-        for h, cnt in hosts:
-            if h in self.__hosts and not self.__hosts[h].is_ppp:
-                self.__hosts[h].counter = cnt
+    def update_stat_for_hosts(self, stat_data):
+        for ip, cnt in stat_data:
+            if ip in self.__ip_lists and not self.__ip_lists[ip][ip].ver:
+                self.__ip_lists[ip].counter = cnt
     #####################################################
 
     def prepare_state(self):
@@ -403,5 +401,5 @@ class Hosts(object):
         :return: dict { host_id: (host_is_active, upload_speed, download_speed, filter_number)
         :rtype: dict
         '''
-        return {h: (self[h].user.tp.get_user_state_for_nas()) for h in self}
+        return {ip: (self[h].user.tp.get_user_state_for_nas()) for h in self for ip in self[h]}
     #####################################################
