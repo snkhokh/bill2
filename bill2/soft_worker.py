@@ -189,9 +189,18 @@ class SoftWorker(Thread):
             self.__tps.load_all_tps(self.db)
 
 ####################################################
+
+if __name__ == "__main__":
+    dbname = 'traf_test'
+    sw = SoftWorker()
+    sw.load_from_db()
+    sw.update_sessions()
+    exit()
+
+
+
+
+
 from bill2.tserv import TnetServer
 ####################################################
-
-
-
 

@@ -113,7 +113,7 @@ class Users():
             c.execute('LOCK TABLES persons READ')
             sql = 'SELECT id AS uid, Name AS name, TaxRateId AS tp_id, Opt AS tp_data_json, version, deleted ' \
                   'FROM persons WHERE version > %s ORDER BY version'
-            c.execute(sql, self.__version)
+            c.execute(sql, (self.__version,))
             if c.rowcount:
                 logSys.debug('load info about %s updated users', c.rowcount)
             for u in ({c.description[i][0]: item for (i, item) in en} for en in
