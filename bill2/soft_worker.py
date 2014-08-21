@@ -202,7 +202,8 @@ if __name__ == "__main__":
     dbname = 'traf_test'
     sw = SoftWorker()
     sw.load_from_db()
-    while 1:
+    print sw.fget_hosts('')
+    while 0:
         sw.users.update(sw.db)
         sw.hosts.update(sw.db)
         sw.hosts.sessions_update(sw.db)

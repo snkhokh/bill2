@@ -175,6 +175,12 @@ class Host(object):
     def keys(self):
         return self.__ips.keys()
     ####################################################
+
+    def fget(self, re_pat):
+        return (i for i in ('%s uid=%s hid=%s name=%s flags=%s' %
+                            (str(self[ip]), self.user.db_id, self.db_id, self.name, self.flags) for ip in self)
+                if not re_pat or re_pat.search(i))
+    ####################################################
     ####################################################
 
 
@@ -216,7 +222,7 @@ class Hosts(object):
 
     def fget(self, mask):
         re_pat = re.compile(mask) if mask else None
-        return tuple(str(self[h][ip]) for h in self for ip in self[h] if not re_pat or re_pat.search(str(self[h][ip])))
+        return tuple(s for h in self for s in self[h].fget(re_pat))
     ####################################################
 
     def get_hosts_needs_stat(self):
