@@ -203,7 +203,7 @@ if __name__ == "__main__":
     sw = SoftWorker()
     sw.load_from_db()
     print sw.fget_hosts('')
-    while 0:
+    while 1:
         sw.users.update(sw.db)
         sw.hosts.update(sw.db)
         sw.hosts.sessions_update(sw.db)

@@ -60,8 +60,6 @@ class IpLists(object):
     ####################################################
 
 
-
-
 class IP(object):
     def __init__(self, addr, mask=32, session_ver=0):
         m1 = 32 - mask
@@ -182,7 +180,6 @@ class Host(object):
                 if not re_pat or re_pat.search(i))
     ####################################################
     ####################################################
-
 
 
 class Hosts(object):
@@ -343,13 +340,18 @@ class Hosts(object):
                 elif user:
                     logSys.debug('new host with id: %s', h['id'])
                     if dynamic:
+                        # новый хост с индексом пула ip
                         self[h['id']] = Host(h['id'], h['Name'], user, h['flags'], h['version'], h['int_ip'])
                     else:
+                        # новый хост со статическим ip
+                        ip_s = net.ip_ntos(h['int_ip'],h['mask'])
+                        # если где-то болтается хост с таким ip - удаляем его
+                        if ip_s in self.__ip_lists:
+                            del self.__ip_lists[ip_s][ip_s]
                         host = Host(h['id'], h['Name'], user, h['flags'], h['version'])
-                        ip = IP(h['int_ip'], h['mask'])
-                        host[net.ip_ntos(h['int_ip'], h['mask'])] = ip
+                        host[ip_s] = IP(h['int_ip'], h['mask'])
+                        self.__ip_lists[ip_s] = host
                         self[h['id']] = host
-                        self.__ip_lists[ip.ip_s] = host
         finally:
             c.execute('UNLOCK TABLES')
     #####################################################
@@ -378,9 +380,17 @@ class Hosts(object):
             user = self.users[h['acc_uid']]
             if user and host and user.db_id == host.user.db_id:
                 if host.pool_id and not ip_id in host:
-                    # создание нового динамического ip
+                    # хост на динамике и под ним появился новый ip (надееемся что из пула)
                     if ip_id in self.__ip_lists:
-                        del self.__ip_lists[ip_id][ip_id]
+                        # если такой ip уже закреплен за другим хостом
+                        if self.__ip_lists[ip_id].pool_id:
+                            # и другой хост на динамике, отбираем у него ip
+                            del self.__ip_lists[ip_id][ip_id]
+                        else:
+                            # если статический, то эта сессия наверное осталась от статика...
+                            # не обрабатываем ее, пока сама не завершится
+                            # todo прибить бы ее принудительно...
+                            continue
                     host[ip_id] = IP(h['int_ip'], 32, h['version'])
                     self.__ip_lists[ip_id] = host
                 if ip_id in host:
