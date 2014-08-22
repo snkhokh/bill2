@@ -69,7 +69,8 @@ class SoftWorker(Thread):
 
     def prepare_state(self):
         with self.__lock:
-            return self.__hosts.prepare_state()
+            return self.__hosts.state_for_nas
+
     ####################################################
 
 
@@ -203,14 +204,12 @@ if __name__ == "__main__":
     sw = SoftWorker()
     sw.load_from_db()
     print sw.fget_hosts('')
-    while 0:
+    while 1:
         sw.users.update(sw.db)
         sw.hosts.update(sw.db)
         sw.hosts.sessions_update(sw.db)
         sw.do_billing()
-        print sw.fget_users('')
-        print sw.fget_hosts('')
-        print sw.fget_tps('')
+        print sw.prepare_state()
         time.sleep(5)
     exit()
 

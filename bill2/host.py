@@ -181,8 +181,25 @@ class Host(object):
                             (str(self[ip]), self.user.db_id, self.db_id, self.name, self.flags) for ip in self)
                 if not re_pat or re_pat.search(i))
     ####################################################
-    ####################################################
 
+    @property
+    def state_for_nas(self):
+        '''
+        :return: tuple(host_is_active, upload_speed, download_speed, filter_number)
+        :rtype: tuple
+        '''
+        (host_is_active, upload_speed, download_speed, filter_number) = self.user.tp.get_user_state_for_nas()
+        if 'X' in self.flags:
+            filter_number = 1
+        elif 'Y' in self.flags:
+            filter_number = 2
+        elif 'Z' in self.flags:
+            filter_number = 3
+        if 'D' in self.flags:
+            host_is_active = False
+        return host_is_active, upload_speed, download_speed, filter_number
+    ####################################################
+    ####################################################
 
 
 class Hosts(object):
@@ -404,10 +421,11 @@ class Hosts(object):
                 host.counter = host[ip].get_delta(cnt['dw'],cnt['up'])
     #####################################################
 
-    def prepare_state(self):
+    @property
+    def state_for_nas(self):
         '''
         :return: dict { host_id: (host_is_active, upload_speed, download_speed, filter_number)
         :rtype: dict
         '''
-        return {ip: (self[h].user.tp.get_user_state_for_nas()) for h in self for ip in self[h]}
+        return {ip: self[h].state_for_nas for h in self for ip in self[h]}
     #####################################################
