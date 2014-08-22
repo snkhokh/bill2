@@ -15,7 +15,6 @@ from util.helpers import getLogger
 logSys = getLogger(__name__)
 
 
-
 class IpLists(object):
     def __init__(self, default_nas=0):
         self.__default_nas = default_nas
@@ -40,20 +39,20 @@ class IpLists(object):
             del self.__nas_ip_list[self.__default_nas][key]
     ####################################################
 
-    def setip(self,nas,ip,value):
+    def setip(self, nas, ip, value):
         if not nas in self.__nas_ip_list:
             self.__nas_ip_list[nas] = dict()
         self.__nas_ip_list[nas][ip] = value
     ####################################################
 
-    def getip(self,nas,ip):
+    def getip(self, nas, ip):
         if not nas in self.__nas_ip_list or not ip in self.__nas_ip_list[nas]:
             return None
         else:
             return self.__nas_ip_list[nas][ip]
     ####################################################
 
-    def delip(self,nas,ip):
+    def delip(self, nas, ip):
         if nas in self.__nas_ip_list and ip in self.__nas_ip_list[nas]:
             del self.__nas_ip_list[nas][ip]
     ####################################################
@@ -76,7 +75,6 @@ class IP(object):
     def __str__(self):
         return 'ip=%s ppp=%s' % (self.ip_s, 'yes' if self.ver else 'no')
     ####################################################
-
 
     @property
     def ip_n(self):
@@ -166,8 +164,8 @@ class Host(object):
     ####################################################
 
     def counter_reset(self):
-        self.__count_in =0
-        self.__count_out =0
+        self.__count_in = 0
+        self.__count_out = 0
     ####################################################
 
     def keys(self):
@@ -301,8 +299,8 @@ class Hosts(object):
         c = db.cursor()
         try:
             c.execute('LOCK TABLES hostip READ')
-            sql = 'SELECT id, int_ip, mask, Name, dynamic, flags, PersonId, version, deleted FROM hostip WHERE version > %s' \
-                  ' ORDER BY version'
+            sql = 'SELECT id, int_ip, mask, Name, dynamic, flags, PersonId, version, deleted FROM hostip' \
+                  ' WHERE version > %s ORDER BY version'
             c.execute(sql, (self.__version,))
             if c.rowcount:
                 logSys.debug('loading info about %s updated hosts', c.rowcount)
@@ -361,7 +359,7 @@ class Hosts(object):
                         self[h['id']] = Host(h['id'], h['Name'], user, h['flags'], h['version'], h['int_ip'])
                     else:
                         # новый хост со статическим ip
-                        ip_s = net.ip_ntos(h['int_ip'],h['mask'])
+                        ip_s = net.ip_ntos(h['int_ip'], h['mask'])
                         # если где-то болтается хост с таким ip - удаляем его
                         if ip_s in self.__ip_lists:
                             del self.__ip_lists[ip_s][ip_s]
@@ -416,7 +414,7 @@ class Hosts(object):
                         # новая сессия
                         ip.counter_reset()
                         ip.ver = h['version']
-                        ip.get_delta(0,0)
+                        ip.get_delta(0, 0)
                     if ip.ver == h['version']:
                         host.counter = ip.get_delta(h['out_octets'], h['in_octets'])
         for host_id in sessions:
@@ -428,7 +426,7 @@ class Hosts(object):
         for ip, cnt in stat_data:
             if ip in self.__ip_lists and not self.__ip_lists[ip][ip].ver:
                 host = self.__ip_lists[ip]
-                host.counter = host[ip].get_delta(cnt['dw'],cnt['up'])
+                host.counter = host[ip].get_delta(cnt['dw'], cnt['up'])
     #####################################################
 
     @property
